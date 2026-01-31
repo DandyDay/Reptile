@@ -15,6 +15,7 @@ import { useTranslation } from "@/lib/i18n";
 import { FeedingPresetManager } from "@/components/feeding-preset-manager";
 import { motion, AnimatePresence } from "framer-motion";
 import { ImageCropper } from "@/components/image-cropper";
+import { AuthDialog } from "@/components/auth-dialog";
 
 type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data";
 
@@ -22,7 +23,7 @@ function SettingsContent() {
     const {
         reptiles, addReptile, updateReptile, deleteReptile, visualSettings,
         setCalViewMode, setLanguage, setTheme, setCustomColor,
-        exportTheme, importTheme
+        exportTheme, importTheme, session
     } = useReptileLogs();
 
     const router = useRouter();
@@ -42,6 +43,7 @@ function SettingsContent() {
     const [editingReptileId, setEditingReptileId] = useState<string | null>(null);
     const [rawImage, setRawImage] = useState<string | null>(null);
     const [isCropping, setIsCropping] = useState(false);
+    const [showAuthDialog, setShowAuthDialog] = useState(false);
 
     // Care Schedule state
     const [feedingEnabled, setFeedingEnabled] = useState(false);
@@ -260,7 +262,14 @@ function SettingsContent() {
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="flex justify-between items-center">
                 <h2 className="text-sm font-semibold text-[var(--muted)] uppercase tracking-wider">{t("settings.your_reptiles")}</h2>
-                <Button size="sm" onClick={() => { resetForm(); setView("add_reptile"); }} className="gap-2">
+                <Button size="sm" onClick={() => {
+                    if (!session) {
+                        setShowAuthDialog(true);
+                        return;
+                    }
+                    resetForm();
+                    setView("add_reptile");
+                }} className="gap-2">
                     <UserPlus className="h-4 w-4" />
                     {t("common.add")}
                 </Button>
@@ -798,6 +807,11 @@ function SettingsContent() {
             </div>
 
             <AnimatePresence>
+                {showAuthDialog && (
+                    <div className="fixed inset-0 z-[100]">
+                        <AuthDialog onClose={() => setShowAuthDialog(false)} />
+                    </div>
+                )}
                 {isCropping && rawImage && (
                     <ImageCropper
                         image={rawImage}
