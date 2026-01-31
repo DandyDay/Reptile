@@ -7,6 +7,11 @@ export type Json =
     | Json[]
 
 export type Database = {
+    // Allows to automatically instantiate createClient with right options
+    // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+    __InternalSupabase: {
+        PostgrestVersion: "14.1"
+    }
     public: {
         Tables: {
             comments: {
@@ -48,6 +53,33 @@ export type Database = {
                     },
                 ]
             }
+            food_presets: {
+                Row: {
+                    created_at: string
+                    emoji: string
+                    id: string
+                    name: string
+                    unit: string
+                    user_id: string
+                }
+                Insert: {
+                    created_at?: string
+                    emoji: string
+                    id?: string
+                    name: string
+                    unit: string
+                    user_id: string
+                }
+                Update: {
+                    created_at?: string
+                    emoji?: string
+                    id?: string
+                    name?: string
+                    unit?: string
+                    user_id?: string
+                }
+                Relationships: []
+            }
             likes: {
                 Row: {
                     created_at: string
@@ -81,12 +113,60 @@ export type Database = {
                     },
                 ]
             }
+            logs: {
+                Row: {
+                    created_at: string
+                    date: string
+                    details: string | null
+                    emoji: string | null
+                    id: string
+                    note: string | null
+                    reptile_id: string
+                    type: string
+                    user_id: string
+                    weight: number | null
+                }
+                Insert: {
+                    created_at?: string
+                    date?: string
+                    details?: string | null
+                    emoji?: string | null
+                    id?: string
+                    note?: string | null
+                    reptile_id: string
+                    type: string
+                    user_id: string
+                    weight?: number | null
+                }
+                Update: {
+                    created_at?: string
+                    date?: string
+                    details?: string | null
+                    emoji?: string | null
+                    id?: string
+                    note?: string | null
+                    reptile_id?: string
+                    type?: string
+                    user_id?: string
+                    weight?: number | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "logs_reptile_id_fkey"
+                        columns: ["reptile_id"]
+                        isOneToOne: false
+                        referencedRelation: "reptiles"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
             posts: {
                 Row: {
                     content: string
                     created_at: string
                     id: string
                     image_url: string | null
+                    likes_count: number | null
                     reptile_id: string | null
                     user_id: string
                 }
@@ -95,6 +175,7 @@ export type Database = {
                     created_at?: string
                     id?: string
                     image_url?: string | null
+                    likes_count?: number | null
                     reptile_id?: string | null
                     user_id: string
                 }
@@ -103,6 +184,7 @@ export type Database = {
                     created_at?: string
                     id?: string
                     image_url?: string | null
+                    likes_count?: number | null
                     reptile_id?: string | null
                     user_id?: string
                 }
@@ -156,27 +238,36 @@ export type Database = {
             reptiles: {
                 Row: {
                     birth_date: string | null
+                    care_schedules: Json | null
+                    color: string | null
                     created_at: string
                     id: string
                     name: string
+                    notes: string | null
                     photo_url: string | null
                     species: string | null
                     user_id: string
                 }
                 Insert: {
                     birth_date?: string | null
+                    care_schedules?: Json | null
+                    color?: string | null
                     created_at?: string
                     id?: string
                     name: string
+                    notes?: string | null
                     photo_url?: string | null
                     species?: string | null
                     user_id: string
                 }
                 Update: {
                     birth_date?: string | null
+                    care_schedules?: Json | null
+                    color?: string | null
                     created_at?: string
                     id?: string
                     name?: string
+                    notes?: string | null
                     photo_url?: string | null
                     species?: string | null
                     user_id?: string

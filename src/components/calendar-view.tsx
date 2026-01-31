@@ -54,6 +54,7 @@ export function CalendarView() {
     const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
     const [formDate, setFormDate] = useState<Date>(new Date());
     const [formTime, setFormTime] = useState(format(new Date(), "HH:mm"));
+    const [selectedReptileForLog, setSelectedReptileForLog] = useState<string>("");
 
     const daysInMonth = eachDayOfInterval({
         start: startOfWeek(startOfMonth(currentMonth)),
@@ -77,12 +78,14 @@ export function CalendarView() {
         setSelectedPreset(null);
         setQuantity("5");
         setSelectedEmoji(null);
+        setSelectedReptileForLog("");
     };
 
     const openForm = () => {
         const now = new Date();
         setFormDate(selectedDate || now);
         setFormTime(format(now, "HH:mm"));
+        setSelectedReptileForLog(currentReptile?.id || (reptiles.length > 0 ? reptiles[0].id : ""));
         setIsFormOpen(true);
     };
 
@@ -112,7 +115,8 @@ export function CalendarView() {
                     note,
                     details: finalDetails,
                     emoji: selectedEmoji || undefined,
-                    weight: weightVal
+                    weight: weightVal,
+                    reptileId: selectedReptileForLog
                 });
                 resetForm();
                 return;
@@ -124,7 +128,8 @@ export function CalendarView() {
             date: combinedDate.toISOString(),
             details: finalDetails,
             note: note,
-            emoji: selectedEmoji || undefined
+            emoji: selectedEmoji || undefined,
+            reptileId: selectedReptileForLog
         });
         resetForm();
     };
@@ -270,6 +275,35 @@ export function CalendarView() {
                         </div>
 
                         <div className="overflow-y-auto p-6 space-y-8 pb-12">
+                            {/* Reptile Selection Section */}
+                            <div className="space-y-4">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("settings.reptile_profile")}</h3>
+                                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                                    {reptiles.map((reptile) => (
+                                        <button
+                                            key={reptile.id}
+                                            onClick={() => setSelectedReptileForLog(reptile.id)}
+                                            className={cn(
+                                                "flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all min-w-max",
+                                                selectedReptileForLog === reptile.id
+                                                    ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-lg shadow-[var(--primary)]/30 scale-105"
+                                                    : "bg-slate-500/5 border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/30"
+                                            )}
+                                        >
+                                            <span className="text-2xl">{reptile.avatar}</span>
+                                            <div className="text-left">
+                                                <p className={cn("text-sm font-bold", selectedReptileForLog === reptile.id ? "text-white" : "text-[var(--foreground)]")}>
+                                                    {reptile.name}
+                                                </p>
+                                                <p className={cn("text-[10px] font-medium opacity-70", selectedReptileForLog === reptile.id ? "text-white" : "text-[var(--muted)]")}>
+                                                    {reptile.species}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {/* Record Type Section */}
                             <div className="space-y-4">
                                 <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.log_type_title")}</h3>

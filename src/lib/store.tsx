@@ -4,18 +4,6 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
-// Fallback for crypto.randomUUID() which might be unavailable in non-secure contexts or older browsers
-const generateId = () => {
-    try {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            return crypto.randomUUID();
-        }
-    } catch (e) {
-        // Fallback to manual generation
-    }
-    return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-};
-
 export type LogType = "feeding" | "poop" | "cleaning" | "memo" | "weight";
 
 export interface CareSchedule {
@@ -71,7 +59,7 @@ interface ReptileContextType {
     updateReptile: (id: string, reptile: Partial<Omit<Reptile, "id">>) => void;
     deleteReptile: (id: string) => void;
     currentReptile: Reptile;
-    addLog: (entry: Omit<LogEntry, "id" | "reptileId">) => void;
+    addLog: (entry: Omit<LogEntry, "id" | "reptileId"> & { reptileId?: string }) => void;
     deleteLog: (id: string) => void;
     isLoaded: boolean;
     visualSettings: {
@@ -93,6 +81,7 @@ interface ReptileContextType {
             memo: string;
             success: string;
             danger: string;
+            weight: string;
         }
     };
     setCalViewMode: (mode: "dot" | "emoji") => void;
@@ -111,137 +100,16 @@ interface ReptileContextType {
 
 const ReptileContext = createContext<ReptileContextType | null>(null);
 
-const STORAGE_KEY = "reptile-logs-v1";
-const REPTILE_KEY = "reptile-list-v1";
-
 export function ReptileProvider({ children }: { children: React.ReactNode }) {
     const [reptiles, setReptiles] = useState<Reptile[]>([]);
-    // Default to null initially to allow useEffect to set it correctly from storage or first item
-    const [selectedReptileId, setSelectedReptileId] = useState<string>("default");
+    const [selectedReptileId, setSelectedReptileId] = useState<string>("");
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
     const [session, setSession] = useState<Session | null>(null);
+    const [foodPresets, setFoodPresets] = useState<FoodPreset[]>([]);
 
-    useEffect(() => {
-        // Initialize session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-        });
-
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
-            setSession(session);
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        const storedLogs = localStorage.getItem(STORAGE_KEY);
-        const storedReptiles = localStorage.getItem(REPTILE_KEY);
-
-        if (storedReptiles) {
-            try {
-                const parsedReptiles = JSON.parse(storedReptiles);
-                setReptiles(parsedReptiles);
-                if (parsedReptiles.length > 0) {
-                    // Optionally restore last selected, but for now default to first
-                    setSelectedReptileId(parsedReptiles[0].id);
-                }
-            } catch (e) {
-                console.error("Failed to parse reptiles", e);
-            }
-        } else {
-            // No stored reptiles, initialize with localized default
-            const storedVisual = localStorage.getItem("reptile-visual-settings-v1");
-            let lang = "ko";
-            if (storedVisual) {
-                try {
-                    const parsed = JSON.parse(storedVisual);
-                    lang = parsed.language || "ko";
-                } catch (e) { }
-            }
-            const name = lang === 'ko' ? "내 파충류" : "My Reptile";
-            const species = lang === 'ko' ? "게코" : "Gecko";
-            setReptiles([{ id: "default", name, species, color: "emerald", avatar: "🦎" }]);
-        }
-
-        if (storedLogs) {
-            try {
-                const parsedLogs = JSON.parse(storedLogs);
-                // Migration: If logs have no reptileId, assign to default
-                const migratedLogs = parsedLogs.map((log: any) => ({
-                    ...log,
-                    reptileId: log.reptileId || "default"
-                }));
-                setLogs(migratedLogs);
-            } catch (e) {
-                console.error("Failed to parse logs", e);
-            }
-        }
-
-        const storedProfile = localStorage.getItem("reptile-user-profile-v1");
-        if (storedProfile) {
-            try {
-                setUserProfile(JSON.parse(storedProfile));
-            } catch (e) { }
-        }
-
-        setIsLoaded(true);
-    }, []);
-
-    useEffect(() => {
-        if (isLoaded) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
-            localStorage.setItem(REPTILE_KEY, JSON.stringify(reptiles));
-        }
-    }, [logs, reptiles, isLoaded]);
-
-    const addLog = (entry: Omit<LogEntry, "id" | "reptileId">) => {
-        const newLog = {
-            ...entry,
-            id: generateId(),
-            reptileId: selectedReptileId
-        };
-        setLogs((prev) => [newLog, ...prev]);
-    };
-
-    const deleteLog = (id: string) => {
-        setLogs((prev) => prev.filter((l) => l.id !== id));
-    };
-
-    const addReptile = (reptile: Omit<Reptile, "id">) => {
-        const newReptile = { ...reptile, id: generateId() };
-        setReptiles(prev => [...prev, newReptile]);
-        setSelectedReptileId(newReptile.id);
-    };
-
-    const updateReptile = (id: string, updatedFields: Partial<Omit<Reptile, "id">>) => {
-        setReptiles(prev => prev.map(r => r.id === id ? { ...r, ...updatedFields } : r));
-    };
-
-    const deleteReptile = (id: string) => {
-        // Prevent deleting if it's the only one left
-        if (reptiles.length <= 1) {
-            alert("You must have at least one reptile profile.");
-            return;
-        }
-
-        const updatedReptiles = reptiles.filter(r => r.id !== id);
-        setReptiles(updatedReptiles);
-        setLogs(prev => prev.filter(l => l.reptileId !== id));
-
-        // If we deleted the current reptile, switch to the first one available
-        if (selectedReptileId === id) {
-            setSelectedReptileId(updatedReptiles[0].id);
-        }
-    };
-
-    const currentReptile = reptiles.find(r => r.id === selectedReptileId) || reptiles[0];
-    const currentLogs = logs.filter(l => l.reptileId === selectedReptileId);
-
+    // Visual settings remain local for now (device preference)
     const [visualSettings, setVisualSettings] = useState({
         calViewMode: "dot" as "dot" | "emoji",
         language: "ko" as "ko" | "en",
@@ -265,6 +133,281 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         }
     });
 
+    // 1. Initialize Auth
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+        });
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+            setSession(session);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    // 2. Fetch Data from Supabase when session exists
+    useEffect(() => {
+        if (!session) {
+            // Reset data if logged out
+            setReptiles([]);
+            setLogs([]);
+            setFoodPresets([]);
+            setUserProfile(null);
+            setIsLoaded(true);
+            return;
+        }
+
+        const fetchData = async () => {
+            setIsLoaded(false);
+            try {
+                // Fetch Reptiles
+                const { data: reptilesData } = await supabase
+                    .from('reptiles')
+                    .select('*')
+                    .order('created_at', { ascending: true });
+
+                if (reptilesData) {
+                    const mappedReptiles: Reptile[] = reptilesData.map(r => ({
+                        id: r.id,
+                        name: r.name,
+                        species: r.species || "",
+                        // @ts-ignore
+                        color: r.color || "emerald",
+                        avatar: r.photo_url || "🦎",
+                        birthday: r.birth_date || undefined,
+                        // @ts-ignore
+                        notes: r.notes || undefined,
+                        careSchedules: r.care_schedules as unknown as CareSchedule[] || []
+                    }));
+                    setReptiles(mappedReptiles);
+                    if (mappedReptiles.length > 0) {
+                        setSelectedReptileId(mappedReptiles[0].id);
+                    }
+                }
+
+                // Fetch Logs
+                const { data: logsData } = await supabase
+                    .from('logs')
+                    .select('*')
+                    .order('date', { ascending: false });
+
+                if (logsData) {
+                    const mappedLogs: LogEntry[] = logsData.map(l => ({
+                        id: l.id,
+                        reptileId: l.reptile_id,
+                        type: l.type as LogType,
+                        date: l.date,
+                        note: l.note || undefined,
+                        details: l.details || undefined,
+                        emoji: l.emoji || undefined,
+                        weight: l.weight || undefined
+                    }));
+                    setLogs(mappedLogs);
+                }
+
+                // Fetch Food Presets
+                const { data: presetsData } = await supabase
+                    .from('food_presets')
+                    .select('*')
+                    .order('created_at', { ascending: true });
+
+                if (presetsData) {
+                    const mappedPresets: FoodPreset[] = presetsData.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        emoji: p.emoji,
+                        unit: p.unit as any
+                    }));
+                    setFoodPresets(mappedPresets);
+                }
+
+                // Fetch Profile
+                const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                if (profileData) {
+                    setUserProfile({
+                        name: profileData.full_name || "",
+                        avatar: profileData.avatar_url || "👤",
+                        bio: profileData.bio || ""
+                    });
+                }
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            } finally {
+                setIsLoaded(true);
+            }
+        };
+
+        fetchData();
+    }, [session]);
+
+    // Data Mutations
+
+    const addReptile = async (reptile: Omit<Reptile, "id">) => {
+        if (!session) return;
+        const newId = crypto.randomUUID();
+        const newReptile = { ...reptile, id: newId };
+
+        // Optimistic update
+        setReptiles(prev => [...prev, newReptile]);
+        setSelectedReptileId(newId);
+
+        const { error } = await supabase.from('reptiles').insert({
+            id: newId,
+            user_id: session.user.id,
+            name: reptile.name,
+            species: reptile.species,
+            photo_url: reptile.avatar,
+            birth_date: reptile.birthday,
+            color: reptile.color,
+            notes: reptile.notes,
+            care_schedules: reptile.careSchedules as any
+        });
+
+        if (error) {
+            console.error("Failed to add reptile", error);
+            // Revert on error
+            setReptiles(prev => prev.filter(r => r.id !== newId));
+        }
+    };
+
+    const updateReptile = async (id: string, updatedFields: Partial<Omit<Reptile, "id">>) => {
+        if (!session) return;
+
+        // Optimistic
+        setReptiles(prev => prev.map(r => r.id === id ? { ...r, ...updatedFields } : r));
+
+        const updateData: any = {};
+        if (updatedFields.name !== undefined) updateData.name = updatedFields.name;
+        if (updatedFields.species !== undefined) updateData.species = updatedFields.species;
+        if (updatedFields.avatar !== undefined) updateData.photo_url = updatedFields.avatar;
+        if (updatedFields.birthday !== undefined) updateData.birth_date = updatedFields.birthday;
+        if (updatedFields.color !== undefined) updateData.color = updatedFields.color;
+        if (updatedFields.notes !== undefined) updateData.notes = updatedFields.notes;
+        if (updatedFields.careSchedules !== undefined) updateData.care_schedules = updatedFields.careSchedules;
+
+        const { error } = await supabase.from('reptiles').update(updateData).eq('id', id);
+
+        if (error) console.error("Failed to update reptile", error);
+    };
+
+    const deleteReptile = async (id: string) => {
+        if (!session) return;
+
+        // Optimistic
+        const previousReptiles = reptiles;
+        const updatedReptiles = reptiles.filter(r => r.id !== id);
+        setReptiles(updatedReptiles);
+        setLogs(prev => prev.filter(l => l.reptileId !== id));
+
+        if (selectedReptileId === id && updatedReptiles.length > 0) {
+            setSelectedReptileId(updatedReptiles[0].id);
+        } else if (updatedReptiles.length === 0) {
+            setSelectedReptileId("");
+        }
+
+        const { error } = await supabase.from('reptiles').delete().eq('id', id);
+
+        if (error) {
+            console.error("Failed to delete reptile", error);
+            setReptiles(previousReptiles); // Revert
+        }
+    };
+
+    const addLog = async (entry: Omit<LogEntry, "id" | "reptileId"> & { reptileId?: string }) => {
+        if (!session) return;
+        const newId = crypto.randomUUID();
+        const targetReptileId = entry.reptileId || selectedReptileId;
+        const newLog = {
+            ...entry,
+            id: newId,
+            reptileId: targetReptileId
+        };
+
+        setLogs((prev) => [newLog, ...prev]);
+
+        const { error } = await supabase.from('logs').insert({
+            id: newId,
+            user_id: session.user.id,
+            reptile_id: targetReptileId,
+            type: entry.type,
+            date: entry.date,
+            note: entry.note,
+            details: entry.details,
+            emoji: entry.emoji,
+            weight: entry.weight
+        });
+
+        if (error) {
+            console.error("Failed to add log", error);
+            setLogs(prev => prev.filter(l => l.id !== newId));
+        }
+    };
+
+    const deleteLog = async (id: string) => {
+        if (!session) return;
+
+        setLogs((prev) => prev.filter((l) => l.id !== id));
+
+        const { error } = await supabase.from('logs').delete().eq('id', id);
+
+        if (error) console.error("Failed to delete log", error);
+    };
+
+    const addFoodPreset = async (preset: Omit<FoodPreset, "id">) => {
+        if (!session) return;
+        const newId = crypto.randomUUID();
+        const newPreset = { ...preset, id: newId };
+
+        setFoodPresets(prev => [...prev, newPreset]);
+
+        const { error } = await supabase.from('food_presets').insert({
+            id: newId,
+            user_id: session.user.id,
+            name: preset.name,
+            emoji: preset.emoji,
+            unit: preset.unit
+        });
+
+        if (error) console.error("Failed to add preset", error);
+    };
+
+    const deleteFoodPreset = async (id: string) => {
+        if (!session) return;
+
+        setFoodPresets(prev => prev.filter(p => p.id !== id));
+
+        const { error } = await supabase.from('food_presets').delete().eq('id', id);
+
+        if (error) console.error("Failed to delete preset", error);
+    };
+
+    const updateUserProfile = async (profile: Partial<UserProfile>) => {
+        if (!session) return;
+
+        const newProfile = userProfile ? { ...userProfile, ...profile } : { name: "", avatar: "👤", bio: "", ...profile };
+        setUserProfile(newProfile as UserProfile);
+
+        const updateData: any = {};
+        if (profile.name !== undefined) updateData.full_name = profile.name;
+        if (profile.avatar !== undefined) updateData.avatar_url = profile.avatar;
+        if (profile.bio !== undefined) updateData.bio = profile.bio;
+
+        const { error } = await supabase.from('profiles').update(updateData).eq('id', session.user.id);
+
+        if (error) console.error("Failed to update profile", error);
+    };
+
+
+    // Load/Save Visual Settings (Local Storage)
     useEffect(() => {
         const stored = localStorage.getItem("reptile-visual-settings-v1");
         if (stored) {
@@ -368,7 +511,8 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             cleaning: "#3b82f6",
             memo: "#a855f7",
             success: "#10b981",
-            danger: "#ef4444"
+            danger: "#ef4444",
+            weight: "#ec4899"
         } : visualSettings.theme === 'dark' ? {
             background: "#0f172a",
             card: "rgba(30, 41, 59, 0.7)",
@@ -430,60 +574,8 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         }
     }, [visualSettings.theme, visualSettings.customColors]);
 
-    // Food Presets Management
-    const getDefaultPresets = (lang: "ko" | "en"): FoodPreset[] => {
-        if (lang === "ko") {
-            return [
-                { id: "preset-1", name: "귀뚜라미", emoji: "🦗", unit: "마리" },
-                { id: "preset-2", name: "밀웜", emoji: "🐛", unit: "마리" },
-                { id: "preset-3", name: "듀비아 바퀴벌레", emoji: "🪳", unit: "마리" },
-                { id: "preset-4", name: "슈퍼밀웜", emoji: "🐛", unit: "마리" },
-                { id: "preset-5", name: "채소", emoji: "🥗", unit: "g" },
-                { id: "preset-6", name: "과일", emoji: "🍎", unit: "g" },
-            ];
-        } else {
-            return [
-                { id: "preset-1", name: "Crickets", emoji: "🦗", unit: "pieces" },
-                { id: "preset-2", name: "Mealworms", emoji: "🐛", unit: "pieces" },
-                { id: "preset-3", name: "Dubia Roaches", emoji: "🪳", unit: "pieces" },
-                { id: "preset-4", name: "Superworms", emoji: "🐛", unit: "pieces" },
-                { id: "preset-5", name: "Vegetables", emoji: "🥗", unit: "grams" },
-                { id: "preset-6", name: "Fruits", emoji: "🍎", unit: "grams" },
-            ];
-        }
-    };
-
-    const [foodPresets, setFoodPresets] = useState<FoodPreset[]>(getDefaultPresets(visualSettings.language));
-
-    useEffect(() => {
-        const stored = localStorage.getItem("reptile-food-presets-v1");
-        if (stored) {
-            try {
-                setFoodPresets(JSON.parse(stored));
-            } catch (e) {
-                console.error("Failed to parse food presets", e);
-            }
-        }
-    }, []);
-
-    const addFoodPreset = (preset: Omit<FoodPreset, "id">) => {
-        const newPreset = { ...preset, id: `preset-${Date.now()}` };
-        const updated = [...foodPresets, newPreset];
-        setFoodPresets(updated);
-        localStorage.setItem("reptile-food-presets-v1", JSON.stringify(updated));
-    };
-
-    const deleteFoodPreset = (id: string) => {
-        const updated = foodPresets.filter(p => p.id !== id);
-        setFoodPresets(updated);
-        localStorage.setItem("reptile-food-presets-v1", JSON.stringify(updated));
-    };
-
-    const updateUserProfile = (profile: Partial<UserProfile>) => {
-        const newProfile = userProfile ? { ...userProfile, ...profile } : { name: "", avatar: "👤", bio: "", ...profile };
-        setUserProfile(newProfile as UserProfile);
-        localStorage.setItem("reptile-user-profile-v1", JSON.stringify(newProfile));
-    };
+    const currentReptile = reptiles.find(r => r.id === selectedReptileId) || (reptiles.length > 0 ? reptiles[0] : null) as any;
+    const currentLogs = logs.filter(l => l.reptileId === selectedReptileId);
 
     const value = {
         logs: currentLogs,

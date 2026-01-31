@@ -121,6 +121,7 @@
         "dark": "Dark Mode",
         "light": "Light Mode",
         "custom": "Custom Theme",
+        "reptile_profile": "Reptile Selection",
         "colors": {
             "background": "Background",
             "card": "Card Background",
