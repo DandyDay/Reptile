@@ -1,0 +1,58 @@
+0 verbose cli /Users/jinho/.nvm/versions/node/v24.11.0/bin/node /Users/jinho/.nvm/versions/node/v24.11.0/bin/npm
+1 info using npm@11.6.1
+2 info using node@v24.11.0
+3 silly config load:file:/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/jinho/Github/reptile/.npmrc
+5 silly config load:file:/Users/jinho/.npmrc
+6 silly config load:file:/Users/jinho/.nvm/versions/node/v24.11.0/etc/npmrc
+7 verbose title npm install
+8 verbose argv "install"
+9 verbose logfile logs-max:10 dir:/Users/jinho/Github/reptile/.npm-cache/_logs/2026-01-30T08_06_24_514Z-
+10 verbose logfile /Users/jinho/Github/reptile/.npm-cache/_logs/2026-01-30T08_06_24_514Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly reify moves {}
+15 verbose stack Error: EPERM: operation not permitted, mkdir '/Users/jinho/Github/reptile/node_modules'
+15 verbose stack     at async mkdir (node:internal/fs/promises:861:10)
+15 verbose stack     at async /Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:593:20
+15 verbose stack     at async Promise.allSettled (index 0)
+15 verbose stack     at async [reifyPackages] (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:326:11)
+15 verbose stack     at async Arborist.reify (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:128:5)
+15 verbose stack     at async Install.exec (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/lib/commands/install.js:150:5)
+15 verbose stack     at async Npm.exec (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/lib/npm.js:208:9)
+15 verbose stack     at async module.exports (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/lib/cli/entry.js:67:5)
+16 error code EPERM
+17 error syscall mkdir
+18 error path /Users/jinho/Github/reptile/node_modules
+19 error errno -1
+20 error Error: EPERM: operation not permitted, mkdir '/Users/jinho/Github/reptile/node_modules'
+20 error     at async mkdir (node:internal/fs/promises:861:10)
+20 error     at async /Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:593:20
+20 error     at async Promise.allSettled (index 0)
+20 error     at async [reifyPackages] (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:326:11)
+20 error     at async Arborist.reify (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:128:5)
+20 error     at async Install.exec (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/lib/commands/install.js:150:5)
+20 error     at async Npm.exec (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/lib/npm.js:208:9)
+20 error     at async module.exports (/Users/jinho/.nvm/versions/node/v24.11.0/lib/node_modules/npm/lib/cli/entry.js:67:5) {
+20 error   errno: -1,
+20 error   code: 'EPERM',
+20 error   syscall: 'mkdir',
+20 error   path: '/Users/jinho/Github/reptile/node_modules'
+20 error }
+21 error
+21 error The operation was rejected by your operating system.
+21 error It is likely you do not have the permissions to access this file as the current user
+21 error
+21 error If you believe this might be a permissions issue, please double-check the
+21 error permissions of the file and its containing directories, or try running
+21 error the command again as root/Administrator.
+22 silly unfinished npm timer reify 1769760384885
+23 silly unfinished npm timer reify:createSparse 1769760385014
+24 verbose cwd /Users/jinho/Github/reptile
+25 verbose os Darwin 25.2.0
+26 verbose node v24.11.0
+27 verbose npm  v11.6.1
+28 verbose exit -1
+29 verbose code -1
+30 error A complete log of this run can be found in: /Users/jinho/Github/reptile/.npm-cache/_logs/2026-01-30T08_06_24_514Z-debug-0.log
