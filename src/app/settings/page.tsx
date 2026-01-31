@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
     ArrowLeft, Trash2, Upload, Download, X, Settings2,
-    Palette, ChevronRight, Database, UserPlus, Users, Languages
+    Palette, ChevronRight, Database, UserPlus, Users, Languages, LogOut
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -16,6 +16,7 @@ import { FeedingPresetManager } from "@/components/feeding-preset-manager";
 import { motion, AnimatePresence } from "framer-motion";
 import { ImageCropper } from "@/components/image-cropper";
 import { AuthDialog } from "@/components/auth-dialog";
+import { supabase } from "@/lib/supabase";
 
 type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data";
 
@@ -255,6 +256,26 @@ function SettingsContent() {
                     </div>
                 </Card>
             </div>
+
+            {session ? (
+                <button
+                    onClick={async () => {
+                        await supabase.auth.signOut();
+                    }}
+                    className="w-full p-4 rounded-xl flex items-center justify-center gap-2 text-red-400 bg-red-500/5 hover:bg-red-500/10 hover:text-red-500 transition-all font-bold text-sm"
+                >
+                    <LogOut className="h-4 w-4" />
+                    Sign Out ({session.user.email})
+                </button>
+            ) : (
+                <button
+                    onClick={() => setShowAuthDialog(true)}
+                    className="w-full p-4 rounded-xl flex items-center justify-center gap-2 text-[var(--primary)] bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 transition-all font-bold text-sm"
+                >
+                    <UserPlus className="h-4 w-4" />
+                    Sign In / Sign Up
+                </button>
+            )}
         </div>
     );
 

@@ -100,6 +100,56 @@ interface ReptileContextType {
 
 const ReptileContext = createContext<ReptileContextType | null>(null);
 
+const LOCAL_STORAGE_KEY = "reptile-local-data-v1";
+const MIGRATION_KEY = "reptile-migration-completed";
+
+interface LocalData {
+    reptiles: Reptile[];
+    logs: LogEntry[];
+    foodPresets: FoodPreset[];
+}
+
+function loadLocalData(): LocalData {
+    if (typeof window === 'undefined') return { reptiles: [], logs: [], foodPresets: [] };
+    try {
+        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (stored) {
+            return JSON.parse(stored);
+        }
+    } catch (e) {
+        console.error("Failed to load local data", e);
+    }
+    return { reptiles: [], logs: [], foodPresets: [] };
+}
+
+function saveLocalData(data: LocalData) {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+        if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+            console.error("LocalStorage quota exceeded");
+        } else {
+            console.error("Failed to save local data", e);
+        }
+    }
+}
+
+function clearLocalData() {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+}
+
+function isMigrationCompleted(): boolean {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(MIGRATION_KEY) === 'true';
+}
+
+function markMigrationCompleted() {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(MIGRATION_KEY, 'true');
+}
+
 export function ReptileProvider({ children }: { children: React.ReactNode }) {
     const [reptiles, setReptiles] = useState<Reptile[]>([]);
     const [selectedReptileId, setSelectedReptileId] = useState<string>("");
@@ -108,6 +158,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [session, setSession] = useState<Session | null>(null);
     const [foodPresets, setFoodPresets] = useState<FoodPreset[]>([]);
+    const [hasMigrated, setHasMigrated] = useState(false);
 
     // Visual settings remain local for now (device preference)
     const [visualSettings, setVisualSettings] = useState({
@@ -148,14 +199,18 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         return () => subscription.unsubscribe();
     }, []);
 
-    // 2. Fetch Data from Supabase when session exists
+    // 2. Fetch Data from Supabase when session exists, or load local data
     useEffect(() => {
         if (!session) {
-            // Reset data if logged out
-            setReptiles([]);
-            setLogs([]);
-            setFoodPresets([]);
+            // Load local data for non-logged-in users
+            const localData = loadLocalData();
+            setReptiles(localData.reptiles);
+            setLogs(localData.logs);
+            setFoodPresets(localData.foodPresets);
             setUserProfile(null);
+            if (localData.reptiles.length > 0) {
+                setSelectedReptileId(localData.reptiles[0].id);
+            }
             setIsLoaded(true);
             return;
         }
@@ -239,6 +294,18 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                     });
                 }
 
+                // Migrate local data if exists and not already migrated
+                if (!hasMigrated && !isMigrationCompleted()) {
+                    const localData = loadLocalData();
+                    if (localData.reptiles.length > 0 || localData.logs.length > 0 || localData.foodPresets.length > 0) {
+                        const success = await migrateLocalData(localData, session.user.id);
+                        if (success) {
+                            setHasMigrated(true);
+                            markMigrationCompleted();
+                        }
+                    }
+                }
+
             } catch (error) {
                 console.error("Error fetching data:", error);
             } finally {
@@ -247,18 +314,163 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         };
 
         fetchData();
-    }, [session]);
+    }, [session, hasMigrated]);
+
+    // Migration function: transfer local data to Supabase
+    const migrateLocalData = async (localData: LocalData, userId: string): Promise<boolean> => {
+        try {
+            // Create a mapping of old reptile IDs to new IDs
+            const reptileIdMap: Record<string, string> = {};
+
+            // Prepare batch data for reptiles
+            const reptilesToInsert = localData.reptiles.map(reptile => {
+                const newId = crypto.randomUUID();
+                reptileIdMap[reptile.id] = newId;
+                return {
+                    id: newId,
+                    user_id: userId,
+                    name: reptile.name,
+                    species: reptile.species,
+                    photo_url: reptile.avatar,
+                    birth_date: reptile.birthday,
+                    color: reptile.color,
+                    notes: reptile.notes,
+                    care_schedules: (reptile.careSchedules || []) as any
+                };
+            });
+
+            // Batch insert reptiles
+            if (reptilesToInsert.length > 0) {
+                const { error: reptilesError } = await supabase.from('reptiles').insert(reptilesToInsert as any);
+                if (reptilesError) throw reptilesError;
+            }
+
+            // Prepare batch data for logs
+            const logsToInsert = localData.logs
+                .filter(log => reptileIdMap[log.reptileId])
+                .map(log => ({
+                    id: crypto.randomUUID(),
+                    user_id: userId,
+                    reptile_id: reptileIdMap[log.reptileId],
+                    type: log.type,
+                    date: log.date,
+                    note: log.note,
+                    details: log.details,
+                    emoji: log.emoji,
+                    weight: log.weight
+                }));
+
+            // Batch insert logs
+            if (logsToInsert.length > 0) {
+                const { error: logsError } = await supabase.from('logs').insert(logsToInsert);
+                if (logsError) throw logsError;
+            }
+
+            // Prepare batch data for food presets
+            const presetsToInsert = localData.foodPresets.map(preset => ({
+                id: crypto.randomUUID(),
+                user_id: userId,
+                name: preset.name,
+                emoji: preset.emoji,
+                unit: preset.unit
+            }));
+
+            // Batch insert presets
+            if (presetsToInsert.length > 0) {
+                const { error: presetsError } = await supabase.from('food_presets').insert(presetsToInsert);
+                if (presetsError) throw presetsError;
+            }
+
+            // Only clear local data after ALL operations succeed
+            clearLocalData();
+
+            // Refetch data to get the migrated items
+            const { data: reptilesData } = await supabase
+                .from('reptiles')
+                .select('*')
+                .order('created_at', { ascending: true });
+
+            if (reptilesData) {
+                const mappedReptiles: Reptile[] = reptilesData.map(r => ({
+                    id: r.id,
+                    name: r.name,
+                    species: r.species || "",
+                    // @ts-ignore
+                    color: r.color || "emerald",
+                    avatar: r.photo_url || "🦎",
+                    birthday: r.birth_date || undefined,
+                    // @ts-ignore
+                    notes: r.notes || undefined,
+                    careSchedules: r.care_schedules as unknown as CareSchedule[] || []
+                }));
+                setReptiles(mappedReptiles);
+                if (mappedReptiles.length > 0) {
+                    setSelectedReptileId(mappedReptiles[0].id);
+                }
+            }
+
+            const { data: logsData } = await supabase
+                .from('logs')
+                .select('*')
+                .order('date', { ascending: false });
+
+            if (logsData) {
+                const mappedLogs: LogEntry[] = logsData.map(l => ({
+                    id: l.id,
+                    reptileId: l.reptile_id,
+                    type: l.type as LogType,
+                    date: l.date,
+                    note: l.note || undefined,
+                    details: l.details || undefined,
+                    emoji: l.emoji || undefined,
+                    weight: l.weight || undefined
+                }));
+                setLogs(mappedLogs);
+            }
+
+            const { data: presetsData } = await supabase
+                .from('food_presets')
+                .select('*')
+                .order('created_at', { ascending: true });
+
+            if (presetsData) {
+                const mappedPresets: FoodPreset[] = presetsData.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    emoji: p.emoji,
+                    unit: p.unit as any
+                }));
+                setFoodPresets(mappedPresets);
+            }
+
+            console.log("Local data migrated successfully!");
+            return true;
+        } catch (error) {
+            console.error("Failed to migrate local data:", error);
+            // Don't clear local data on failure - preserve user's data
+            return false;
+        }
+    };
 
     // Data Mutations
 
     const addReptile = async (reptile: Omit<Reptile, "id">) => {
-        if (!session) return;
         const newId = crypto.randomUUID();
         const newReptile = { ...reptile, id: newId };
 
         // Optimistic update
-        setReptiles(prev => [...prev, newReptile]);
+        setReptiles(prev => {
+            const updated = [...prev, newReptile];
+            if (!session) {
+                // Save to local storage
+                const localData = loadLocalData();
+                saveLocalData({ ...localData, reptiles: updated });
+            }
+            return updated;
+        });
         setSelectedReptileId(newId);
+
+        if (!session) return; // Local storage already updated above
 
         const { error } = await supabase.from('reptiles').insert({
             id: newId,
@@ -280,10 +492,19 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
     };
 
     const updateReptile = async (id: string, updatedFields: Partial<Omit<Reptile, "id">>) => {
-        if (!session) return;
+        const previousReptiles = reptiles;
 
         // Optimistic
-        setReptiles(prev => prev.map(r => r.id === id ? { ...r, ...updatedFields } : r));
+        setReptiles(prev => {
+            const updated = prev.map(r => r.id === id ? { ...r, ...updatedFields } : r);
+            if (!session) {
+                const localData = loadLocalData();
+                saveLocalData({ ...localData, reptiles: updated });
+            }
+            return updated;
+        });
+
+        if (!session) return;
 
         const updateData: any = {};
         if (updatedFields.name !== undefined) updateData.name = updatedFields.name;
@@ -296,23 +517,33 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
 
         const { error } = await supabase.from('reptiles').update(updateData).eq('id', id);
 
-        if (error) console.error("Failed to update reptile", error);
+        if (error) {
+            console.error("Failed to update reptile", error);
+            setReptiles(previousReptiles); // Revert
+        }
     };
 
     const deleteReptile = async (id: string) => {
-        if (!session) return;
-
         // Optimistic
         const previousReptiles = reptiles;
         const updatedReptiles = reptiles.filter(r => r.id !== id);
+        const updatedLogs = logs.filter(l => l.reptileId !== id);
+
         setReptiles(updatedReptiles);
-        setLogs(prev => prev.filter(l => l.reptileId !== id));
+        setLogs(updatedLogs);
+
+        if (!session) {
+            const localData = loadLocalData();
+            saveLocalData({ ...localData, reptiles: updatedReptiles, logs: updatedLogs });
+        }
 
         if (selectedReptileId === id && updatedReptiles.length > 0) {
             setSelectedReptileId(updatedReptiles[0].id);
         } else if (updatedReptiles.length === 0) {
             setSelectedReptileId("");
         }
+
+        if (!session) return;
 
         const { error } = await supabase.from('reptiles').delete().eq('id', id);
 
@@ -323,7 +554,6 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
     };
 
     const addLog = async (entry: Omit<LogEntry, "id" | "reptileId"> & { reptileId?: string }) => {
-        if (!session) return;
         const newId = crypto.randomUUID();
         const targetReptileId = entry.reptileId || selectedReptileId;
         const newLog = {
@@ -332,7 +562,16 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             reptileId: targetReptileId
         };
 
-        setLogs((prev) => [newLog, ...prev]);
+        setLogs((prev) => {
+            const updated = [newLog, ...prev];
+            if (!session) {
+                const localData = loadLocalData();
+                saveLocalData({ ...localData, logs: updated });
+            }
+            return updated;
+        });
+
+        if (!session) return;
 
         const { error } = await supabase.from('logs').insert({
             id: newId,
@@ -353,21 +592,41 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
     };
 
     const deleteLog = async (id: string) => {
-        if (!session) return;
+        const previousLogs = logs;
 
-        setLogs((prev) => prev.filter((l) => l.id !== id));
+        setLogs((prev) => {
+            const updated = prev.filter((l) => l.id !== id);
+            if (!session) {
+                const localData = loadLocalData();
+                saveLocalData({ ...localData, logs: updated });
+            }
+            return updated;
+        });
+
+        if (!session) return;
 
         const { error } = await supabase.from('logs').delete().eq('id', id);
 
-        if (error) console.error("Failed to delete log", error);
+        if (error) {
+            console.error("Failed to delete log", error);
+            setLogs(previousLogs); // Revert
+        }
     };
 
     const addFoodPreset = async (preset: Omit<FoodPreset, "id">) => {
-        if (!session) return;
         const newId = crypto.randomUUID();
         const newPreset = { ...preset, id: newId };
 
-        setFoodPresets(prev => [...prev, newPreset]);
+        setFoodPresets(prev => {
+            const updated = [...prev, newPreset];
+            if (!session) {
+                const localData = loadLocalData();
+                saveLocalData({ ...localData, foodPresets: updated });
+            }
+            return updated;
+        });
+
+        if (!session) return;
 
         const { error } = await supabase.from('food_presets').insert({
             id: newId,
@@ -377,17 +636,32 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             unit: preset.unit
         });
 
-        if (error) console.error("Failed to add preset", error);
+        if (error) {
+            console.error("Failed to add preset", error);
+            setFoodPresets(prev => prev.filter(p => p.id !== newId)); // Revert
+        }
     };
 
     const deleteFoodPreset = async (id: string) => {
-        if (!session) return;
+        const previousPresets = foodPresets;
 
-        setFoodPresets(prev => prev.filter(p => p.id !== id));
+        setFoodPresets(prev => {
+            const updated = prev.filter(p => p.id !== id);
+            if (!session) {
+                const localData = loadLocalData();
+                saveLocalData({ ...localData, foodPresets: updated });
+            }
+            return updated;
+        });
+
+        if (!session) return;
 
         const { error } = await supabase.from('food_presets').delete().eq('id', id);
 
-        if (error) console.error("Failed to delete preset", error);
+        if (error) {
+            console.error("Failed to delete preset", error);
+            setFoodPresets(previousPresets); // Revert
+        }
     };
 
     const updateUserProfile = async (profile: Partial<UserProfile>) => {

@@ -28,12 +28,13 @@ import { LogType, useReptileLogs } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "@/lib/i18n";
+import { AuthDialog } from "@/components/auth-dialog";
 
 export function CalendarView() {
     const {
         reptiles, logs, addLog, deleteLog,
         visualSettings, foodPresets, currentReptile,
-        setSelectedReptileId
+        setSelectedReptileId, session
     } = useReptileLogs();
 
     const { t, lang } = useTranslation();
@@ -44,6 +45,7 @@ export function CalendarView() {
     const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
     const [isPickerOpen, setIsPickerOpen] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
+    const [showAuthDialog, setShowAuthDialog] = useState(false);
 
     // Form State
     const [logType, setLogType] = useState<LogType>('feeding');
@@ -82,6 +84,13 @@ export function CalendarView() {
     };
 
     const openForm = () => {
+        // Allow adding logs even without login (saved locally)
+        // But need at least one reptile to log for
+        if (reptiles.length === 0) {
+            // No reptile to add log for - show auth dialog to guide user
+            setShowAuthDialog(true);
+            return;
+        }
         const now = new Date();
         setFormDate(selectedDate || now);
         setFormTime(format(now, "HH:mm"));
@@ -972,6 +981,11 @@ export function CalendarView() {
             </motion.button>
 
             {renderModal()}
+            {showAuthDialog && (
+                <div className="fixed inset-0 z-[100]">
+                    <AuthDialog onClose={() => setShowAuthDialog(false)} />
+                </div>
+            )}
         </div>
     );
 }
