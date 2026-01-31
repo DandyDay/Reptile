@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useReptileLogs } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import { ImageCropper } from "@/components/image-cropper";
 
 type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data";
 
-export default function SettingsPage() {
+function SettingsContent() {
     const {
         reptiles, addReptile, updateReptile, deleteReptile, visualSettings,
         setCalViewMode, setLanguage, setTheme, setCustomColor,
@@ -815,5 +815,13 @@ export default function SettingsPage() {
                 )}
             </AnimatePresence>
         </main>
+    );
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-[var(--background)] p-4 flex items-center justify-center text-[var(--muted)]">Loading settings...</div>}>
+            <SettingsContent />
+        </Suspense>
     );
 }

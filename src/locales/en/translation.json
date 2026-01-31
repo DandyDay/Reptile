@@ -27,6 +27,7 @@
         "poop": "Poop",
         "cleaning": "Cleaning",
         "memo": "Memo",
+        "weight": "Weight",
         "clean": "Clean",
         "feeding_details": "Food Details / Amount",
         "details": "Details",
@@ -42,6 +43,7 @@
         "placeholder_memo": "Enter your memo...",
         "placeholder_details_poop": "e.g. Normal",
         "placeholder_details_cleaning": "e.g. Spot Clean",
+        "placeholder_weight": "e.g. 45g (Before meal)",
         "condition_normal": "Normal",
         "cleaning_spot": "Spot Clean",
         "cleaning_full": "Full Clean",
@@ -132,6 +134,7 @@
             "poop": "Poop Logs",
             "cleaning": "Cleaning Logs",
             "memo": "Memo Logs",
+            "weight": "Weight Logs",
             "success": "Success/Done",
             "danger": "Warning/Delete"
         },
