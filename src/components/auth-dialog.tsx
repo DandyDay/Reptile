@@ -34,7 +34,7 @@ export function AuthDialog({ onClose }: AuthDialogProps) {
                 if (error) throw error;
                 onClose();
             } else {
-                const { error } = await supabase.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
@@ -46,8 +46,13 @@ export function AuthDialog({ onClose }: AuthDialogProps) {
                     },
                 });
                 if (error) throw error;
-                alert("Check your email for the confirmation link!");
-                onClose();
+
+                if (data.session) {
+                    onClose();
+                } else {
+                    alert("가입 확인 이메일을 보냈습니다. 이메일을 확인해주세요!");
+                    onClose();
+                }
             }
         } catch (err: any) {
             setError(err.message);

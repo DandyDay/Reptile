@@ -199,6 +199,8 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         return () => subscription.unsubscribe();
     }, []);
 
+    const isMigratingRef = React.useRef(false);
+
     // 2. Fetch Data from Supabase when session exists, or load local data
     useEffect(() => {
         if (!session) {
@@ -298,13 +300,18 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 // Migrate local data if exists and not already migrated
-                if (!hasMigrated && !isMigrationCompleted()) {
+                if (!hasMigrated && !isMigrationCompleted() && !isMigratingRef.current) {
                     const localData = loadLocalData();
                     if (localData.reptiles.length > 0 || localData.logs.length > 0 || localData.foodPresets.length > 0) {
-                        const success = await migrateLocalData(localData, session.user.id);
-                        if (success) {
-                            setHasMigrated(true);
-                            markMigrationCompleted();
+                        isMigratingRef.current = true;
+                        try {
+                            const success = await migrateLocalData(localData, session.user.id);
+                            if (success) {
+                                setHasMigrated(true);
+                                markMigrationCompleted();
+                            }
+                        } finally {
+                            isMigratingRef.current = false;
                         }
                     }
                 }
