@@ -10,6 +10,7 @@ import { Post } from "../types";
 import { Loader2, ChevronLeft, AlertCircle } from "lucide-react";
 import { ko, enUS } from "date-fns/locale";
 import { AuthDialog } from "@/components/auth-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 export default function PostDetailPage() {
     const params = useParams();
@@ -22,6 +23,7 @@ export default function PostDetailPage() {
     const [error, setError] = useState<string | null>(null);
     const [showAuthDialog, setShowAuthDialog] = useState(false);
     const [likingPostId, setLikingPostId] = useState<string | null>(null);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
     // Safely handle id from params
     const id = params?.id && (Array.isArray(params.id) ? params.id[0] : params.id);
@@ -137,18 +139,19 @@ export default function PostDetailPage() {
         }
     };
 
-    const handleDeletePost = async (postId: string) => {
-        if (!confirm('이 게시물을 삭제하시겠습니까?')) return;
+    const handleDeletePost = async () => {
+        if (!post) return;
 
         const { error } = await supabase
             .from('posts')
             .delete()
-            .eq('id', postId);
+            .eq('id', post.id);
 
         if (!error) {
             router.push('/community');
         } else {
-            alert("삭제 실패: " + error.message);
+            console.error(error);
+            alert("삭제 실패");
         }
     };
 
@@ -198,9 +201,20 @@ export default function PostDetailPage() {
                     locale={locale}
                     isOwner={session?.user?.id === post.user_id}
                     onLike={() => handleLike(post.id, post.isLiked || false)}
-                    onDelete={() => handleDeletePost(post.id)}
+                    onDelete={() => setDeleteConfirmOpen(true)}
                 />
             </main>
+
+            <ConfirmDialog
+                isOpen={deleteConfirmOpen}
+                onClose={() => setDeleteConfirmOpen(false)}
+                onConfirm={handleDeletePost}
+                title={t("common.delete")}
+                description="이 게시물을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+                confirmText={t("common.delete")}
+                cancelText={t("common.cancel")}
+                isDestructive
+            />
         </div>
     );
 }

@@ -9,6 +9,7 @@ import {
     LogIn, LogOut, Loader2
 } from "lucide-react";
 import { AuthDialog } from "@/components/auth-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ko, enUS } from "date-fns/locale";
 import { Post } from "./types";
 import { PostCard } from "./components/post-card";
@@ -30,6 +31,10 @@ export default function CommunityPage() {
     // Profile State
     const [myProfile, setMyProfile] = useState<any>(null);
     const [likingPostId, setLikingPostId] = useState<string | null>(null);
+
+    // Delete confirmation state
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [postToDelete, setPostToDelete] = useState<string | null>(null);
 
     const locale = visualSettings.language === 'ko' ? ko : enUS;
 
@@ -279,17 +284,26 @@ export default function CommunityPage() {
         }
     };
 
-    const handleDeletePost = async (postId: string) => {
-        if (!confirm('이 게시물을 삭제하시겠습니까?')) return;
+    const promptDelete = (postId: string) => {
+        setPostToDelete(postId);
+        setDeleteConfirmOpen(true);
+    };
+
+    const handleDeletePost = async () => {
+        if (!postToDelete) return;
 
         const { error } = await supabase
             .from('posts')
             .delete()
-            .eq('id', postId);
+            .eq('id', postToDelete);
 
         if (!error) {
-            setPosts(prev => prev.filter(p => p.id !== postId));
+            setPosts(prev => prev.filter(p => p.id !== postToDelete));
+        } else {
+            console.error(error);
+            alert("삭제 실패");
         }
+        setPostToDelete(null);
     };
 
     const handleLogout = async () => {
@@ -405,11 +419,22 @@ export default function CommunityPage() {
                             locale={locale}
                             isOwner={session?.user?.id === post.user_id}
                             onLike={() => handleLike(post.id, post.isLiked || false)}
-                            onDelete={() => handleDeletePost(post.id)}
+                            onDelete={() => promptDelete(post.id)}
                         />
                     ))
                 )}
             </main>
+
+            <ConfirmDialog
+                isOpen={deleteConfirmOpen}
+                onClose={() => setDeleteConfirmOpen(false)}
+                onConfirm={handleDeletePost}
+                title={t("common.delete")}
+                description="이 게시물을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+                confirmText={t("common.delete")}
+                cancelText={t("common.cancel")}
+                isDestructive
+            />
         </div>
     );
 }
