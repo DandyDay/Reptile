@@ -166,6 +166,7 @@ export type Database = {
                     created_at: string
                     id: string
                     image_url: string | null
+                    image_urls: Json | null
                     likes_count: number | null
                     reptile_id: string | null
                     user_id: string
@@ -175,6 +176,7 @@ export type Database = {
                     created_at?: string
                     id?: string
                     image_url?: string | null
+                    image_urls?: Json | null
                     likes_count?: number | null
                     reptile_id?: string | null
                     user_id: string
@@ -184,6 +186,7 @@ export type Database = {
                     created_at?: string
                     id?: string
                     image_url?: string | null
+                    image_urls?: Json | null
                     likes_count?: number | null
                     reptile_id?: string | null
                     user_id?: string

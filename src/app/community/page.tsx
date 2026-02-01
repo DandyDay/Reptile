@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useReptileLogs } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import {
-    Users, MessageSquare, User, Heart,
-    MoreHorizontal, Share2, MessageCircle,
-    UserPlus, Search, PenLine, LogIn, LogOut, Loader2
+    Users, MessageSquare, Heart, X, Image as ImageIcon,
+    MoreHorizontal, Share2, MessageCircle, ChevronLeft, ChevronRight,
+    LogIn, LogOut, Loader2, Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AuthDialog } from "@/components/auth-dialog";
@@ -18,22 +18,21 @@ import { ko, enUS } from "date-fns/locale";
 interface Post {
     id: string;
     content: string;
-    image_url?: string;
+    image_urls: string[];
     created_at: string;
-    likes_count: number; // We'll count this manually for now
+    likes_count: number;
     user_id: string;
     profiles: {
         username: string;
         full_name: string;
         avatar_url: string;
     } | null;
-    my_like?: boolean;
+    isLiked?: boolean;
 }
 
 export default function CommunityPage() {
     const { t } = useTranslation();
     const { session, visualSettings } = useReptileLogs();
-    const [activeTab, setActiveTab] = useState<'feed' | 'friends' | 'profile'>('feed');
     const [showAuthDialog, setShowAuthDialog] = useState(false);
 
     // Feed State
@@ -41,15 +40,19 @@ export default function CommunityPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [newPostContent, setNewPostContent] = useState("");
     const [isPosting, setIsPosting] = useState(false);
+    const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Profile State (Supabase)
+    // Profile State
     const [myProfile, setMyProfile] = useState<any>(null);
 
     const locale = visualSettings.language === 'ko' ? ko : enUS;
 
-    // Fetch Posts
+    // Fetch Posts with like status
     const fetchPosts = async () => {
         setIsLoading(true);
+
         const { data, error } = await supabase
             .from('posts')
             .select(`
@@ -59,9 +62,23 @@ export default function CommunityPage() {
             .order('created_at', { ascending: false });
 
         if (!error && data) {
-            // Check likes (basic implementation)
-            // Ideally we do a join or separate count, but for simplified view:
-            setPosts(data as any);
+            // Check which posts the user has liked
+            let likedPostIds: string[] = [];
+            if (session?.user) {
+                const { data: likes } = await supabase
+                    .from('likes')
+                    .select('post_id')
+                    .eq('user_id', session.user.id);
+                likedPostIds = likes?.map(l => l.post_id) || [];
+            }
+
+            const postsWithLikes: Post[] = data.map((post: any) => ({
+                ...post,
+                image_urls: Array.isArray(post.image_urls) ? post.image_urls : [],
+                likes_count: post.likes_count || 0,
+                isLiked: likedPostIds.includes(post.id)
+            }));
+            setPosts(postsWithLikes);
         }
         setIsLoading(false);
     };
@@ -83,38 +100,154 @@ export default function CommunityPage() {
     useEffect(() => {
         fetchPosts();
 
-        // Subscribe to new posts
+        // Subscribe to post changes
         const channel = supabase
-            .channel('realtime posts')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, (payload) => {
-                fetchPosts(); // Refresh on new post
+            .channel('posts-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+                fetchPosts();
             })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, []);
+    }, [session]);
+
+    // Handle image selection
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length + selectedImages.length > 4) {
+            alert('최대 4장까지 선택 가능합니다.');
+            return;
+        }
+
+        const newFiles = files.slice(0, 4 - selectedImages.length);
+        setSelectedImages(prev => [...prev, ...newFiles]);
+
+        // Create previews
+        newFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreviews(prev => [...prev, reader.result as string]);
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const removeImage = (index: number) => {
+        setSelectedImages(prev => prev.filter((_, i) => i !== index));
+        setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Upload images to Supabase Storage
+    const uploadImages = async (): Promise<string[]> => {
+        if (!session?.user || selectedImages.length === 0) return [];
+
+        const urls: string[] = [];
+        for (const file of selectedImages) {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${session.user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+            const { error } = await supabase.storage
+                .from('posts')
+                .upload(fileName, file);
+
+            if (!error) {
+                const { data: urlData } = supabase.storage
+                    .from('posts')
+                    .getPublicUrl(fileName);
+                urls.push(urlData.publicUrl);
+            }
+        }
+        return urls;
+    };
 
     const handleCreatePost = async () => {
-        if (!newPostContent.trim()) return;
+        if (!newPostContent.trim() && selectedImages.length === 0) return;
         if (!session) {
             setShowAuthDialog(true);
             return;
         }
 
         setIsPosting(true);
-        const { error } = await supabase.from('posts').insert({
-            content: newPostContent,
-            user_id: session.user.id
-        });
+        try {
+            // Upload images first
+            const imageUrls = await uploadImages();
 
-        if (!error) {
-            setNewPostContent("");
-        } else {
-            alert("Failed to post");
+            const { error } = await supabase.from('posts').insert({
+                content: newPostContent,
+                user_id: session.user.id,
+                image_urls: imageUrls
+            });
+
+            if (!error) {
+                setNewPostContent("");
+                setSelectedImages([]);
+                setImagePreviews([]);
+            } else {
+                console.error('Post error:', error);
+                alert("게시 실패: " + error.message);
+            }
+        } catch (err) {
+            console.error('Error creating post:', err);
+            alert("게시 중 오류가 발생했습니다.");
         }
         setIsPosting(false);
+    };
+
+    const handleLike = async (postId: string, isLiked: boolean) => {
+        if (!session) {
+            setShowAuthDialog(true);
+            return;
+        }
+
+        // Optimistic update
+        setPosts(prev => prev.map(p => {
+            if (p.id === postId) {
+                return {
+                    ...p,
+                    isLiked: !isLiked,
+                    likes_count: isLiked ? p.likes_count - 1 : p.likes_count + 1
+                };
+            }
+            return p;
+        }));
+
+        if (isLiked) {
+            await supabase
+                .from('likes')
+                .delete()
+                .eq('post_id', postId)
+                .eq('user_id', session.user.id);
+
+            await supabase
+                .from('posts')
+                .update({ likes_count: posts.find(p => p.id === postId)!.likes_count - 1 })
+                .eq('id', postId);
+        } else {
+            await supabase.from('likes').insert({
+                post_id: postId,
+                user_id: session.user.id
+            });
+
+            await supabase
+                .from('posts')
+                .update({ likes_count: posts.find(p => p.id === postId)!.likes_count + 1 })
+                .eq('id', postId);
+        }
+    };
+
+    const handleDeletePost = async (postId: string) => {
+        if (!confirm('이 게시물을 삭제하시겠습니까?')) return;
+
+        const { error } = await supabase
+            .from('posts')
+            .delete()
+            .eq('id', postId);
+
+        if (!error) {
+            setPosts(prev => prev.filter(p => p.id !== postId));
+        }
     };
 
     const handleLogout = async () => {
@@ -143,179 +276,238 @@ export default function CommunityPage() {
                         )}
                     </div>
                 </div>
-
-                {/* Tabs */}
-                <div className="flex px-2 border-b border-[var(--border)] bg-[var(--background)]/50">
-                    {['feed', 'friends', 'profile'].map((tab) => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab as any)}
-                            className={cn(
-                                "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all relative",
-                                activeTab === tab ? "text-[var(--primary)]" : "text-[var(--muted)]"
-                            )}
-                        >
-                            {tab === 'feed' && <MessageSquare className="h-4 w-4" />}
-                            {tab === 'friends' && <Users className="h-4 w-4" />}
-                            {tab === 'profile' && <User className="h-4 w-4" />}
-                            <span className="capitalize">{t(`community.${tab}` as any)}</span>
-                            {activeTab === tab && (
-                                <motion.div layoutId="tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--primary)]" />
-                            )}
-                        </button>
-                    ))}
-                </div>
             </header>
 
             {/* Content */}
             <main className="p-4 space-y-4">
-                <AnimatePresence mode="wait">
-                    {activeTab === 'feed' && (
-                        <motion.div
-                            key="feed"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            className="space-y-4"
-                        >
-                            {/* Create Post Input */}
-                            <div className="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] flex gap-3">
-                                <div className="h-10 w-10 rounded-full bg-slate-500/20 overflow-hidden flex items-center justify-center text-xl shrink-0">
-                                    {myProfile?.avatar_url ? (
-                                        <img src={myProfile.avatar_url} alt="me" className="h-full w-full object-cover" />
-                                    ) : (
-                                        "👤"
-                                    )}
-                                </div>
-                                <input
-                                    type="text"
-                                    value={newPostContent}
-                                    onChange={(e) => setNewPostContent(e.target.value)}
-                                    placeholder={session ? t("community.whats_happening") : "Login to post..."}
-                                    disabled={!session}
-                                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--muted)]"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleCreatePost()}
-                                />
-                                <button
-                                    onClick={handleCreatePost}
-                                    disabled={isPosting || !newPostContent.trim()}
-                                    className="p-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] font-bold text-xs uppercase hover:bg-[var(--primary)]/20 transition-colors disabled:opacity-50"
-                                >
-                                    {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post"}
-                                </button>
-                            </div>
-
-                            {/* Feed Items */}
-                            {isLoading ? (
-                                <div className="py-20 text-center text-[var(--muted)]">
-                                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                                    <p className="text-xs">Loading feed...</p>
-                                </div>
-                            ) : posts.length === 0 ? (
-                                <div className="py-20 text-center text-[var(--muted)] opacity-50">
-                                    <p>No posts yet. Be the first!</p>
-                                </div>
+                {/* Create Post Card */}
+                <div className="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] space-y-3">
+                    <div className="flex gap-3">
+                        <div className="h-10 w-10 rounded-full bg-slate-500/20 overflow-hidden flex items-center justify-center text-xl shrink-0">
+                            {myProfile?.avatar_url ? (
+                                <img src={myProfile.avatar_url} alt="me" className="h-full w-full object-cover" />
                             ) : (
-                                posts.map(post => (
-                                    <div key={post.id} className="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-full bg-indigo-500/10 overflow-hidden flex items-center justify-center text-xl border border-indigo-500/20">
-                                                    {post.profiles?.avatar_url ? (
-                                                        <img src={post.profiles.avatar_url} alt="av" className="h-full w-full object-cover" />
-                                                    ) : "🦎"}
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-sm font-bold text-[var(--foreground)]">
-                                                        {post.profiles?.full_name || post.profiles?.username || "Unknown"}
-                                                    </h3>
-                                                    <p className="text-[10px] text-[var(--muted)] font-medium">
-                                                        {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale })}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <button className="text-[var(--muted)] hover:text-[var(--foreground)]">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </button>
-                                        </div>
-
-                                        <p className="text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-wrap">
-                                            {post.content}
-                                        </p>
-
-                                        <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                                            <button className="flex items-center gap-1.5 text-[var(--muted)] hover:text-red-500 transition-colors group">
-                                                <Heart className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                                                <span className="text-xs font-medium">{post.likes_count || 0}</span>
-                                            </button>
-                                            <button className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--primary)] transition-colors">
-                                                <MessageCircle className="h-4 w-4" />
-                                                <span className="text-xs font-medium">0</span>
-                                            </button>
-                                            <button className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
-                                                <Share2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))
+                                "👤"
                             )}
-                        </motion.div>
-                    )}
+                        </div>
+                        <textarea
+                            value={newPostContent}
+                            onChange={(e) => setNewPostContent(e.target.value)}
+                            placeholder={session ? t("community.whats_happening") : "로그인하고 게시하기..."}
+                            disabled={!session}
+                            rows={2}
+                            className="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--muted)] resize-none"
+                        />
+                    </div>
 
-                    {activeTab === 'friends' && (
-                        <motion.div
-                            key="friends"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            className="space-y-4 text-center py-20"
-                        >
-                            <Users className="h-12 w-12 mx-auto text-[var(--muted)] mb-4 opacity-50" />
-                            <h3 className="text-lg font-bold text-[var(--muted)]">Friends Feature Coming Soon</h3>
-                            <p className="text-sm text-[var(--muted)] opacity-70 mb-6">
-                                Connect with other reptile lovers!
-                            </p>
-                        </motion.div>
-                    )}
-
-                    {activeTab === 'profile' && (
-                        <motion.div
-                            key="profile"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            className="space-y-6"
-                        >
-                            {!session ? (
-                                <div className="text-center py-20 space-y-4">
-                                    <div className="text-4xl">🔐</div>
-                                    <h3 className="font-bold">Login to view profile</h3>
+                    {/* Image Previews */}
+                    {imagePreviews.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                            {imagePreviews.map((preview, idx) => (
+                                <div key={idx} className="relative shrink-0">
+                                    <img src={preview} alt="" className="h-20 w-20 object-cover rounded-lg" />
                                     <button
-                                        onClick={() => setShowAuthDialog(true)}
-                                        className="bg-[var(--primary)] text-white px-6 py-2 rounded-full font-bold"
+                                        onClick={() => removeImage(idx)}
+                                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
                                     >
-                                        Login / Signup
+                                        <X className="h-3 w-3" />
                                     </button>
                                 </div>
-                            ) : (
-                                <div className="bg-[var(--card)] rounded-[32px] p-6 border border-[var(--border)] text-center relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-br from-[var(--primary)]/20 to-blue-500/20" />
-                                    <div className="relative mt-8 mb-4">
-                                        <div className="h-24 w-24 mx-auto rounded-full bg-[var(--background)] border-4 border-[var(--card)] flex items-center justify-center text-5xl shadow-lg overflow-hidden">
-                                            {myProfile?.avatar_url ? (
-                                                <img src={myProfile.avatar_url} className="h-full w-full object-cover" />
-                                            ) : "👤"}
-                                        </div>
-                                    </div>
-                                    <h2 className="text-2xl font-black">{myProfile?.full_name || "Reptile Lover"}</h2>
-                                    <p className="text-sm text-[var(--muted)] mt-1">{myProfile?.bio || "No bio yet."}</p>
-                                    <div className="mt-4 text-xs text-[var(--muted)]">{session.user.email}</div>
-                                </div>
-                            )}
-                        </motion.div>
+                            ))}
+                        </div>
                     )}
-                </AnimatePresence>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleImageSelect}
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                        />
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!session || selectedImages.length >= 4}
+                            className="flex items-center gap-1 text-[var(--primary)] text-sm font-medium disabled:opacity-50"
+                        >
+                            <ImageIcon className="h-5 w-5" />
+                            <span>사진 {selectedImages.length}/4</span>
+                        </button>
+                        <button
+                            onClick={handleCreatePost}
+                            disabled={isPosting || (!newPostContent.trim() && selectedImages.length === 0)}
+                            className="px-4 py-1.5 rounded-full bg-[var(--primary)] text-white font-bold text-sm disabled:opacity-50"
+                        >
+                            {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : "게시"}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Feed */}
+                {isLoading ? (
+                    <div className="py-20 text-center text-[var(--muted)]">
+                        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                        <p className="text-xs">Loading feed...</p>
+                    </div>
+                ) : posts.length === 0 ? (
+                    <div className="py-20 text-center text-[var(--muted)] opacity-50">
+                        <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>첫 번째 게시물을 작성해보세요!</p>
+                    </div>
+                ) : (
+                    posts.map(post => (
+                        <PostCard
+                            key={post.id}
+                            post={post}
+                            locale={locale}
+                            isOwner={session?.user?.id === post.user_id}
+                            onLike={() => handleLike(post.id, post.isLiked || false)}
+                            onDelete={() => handleDeletePost(post.id)}
+                        />
+                    ))
+                )}
             </main>
+        </div>
+    );
+}
+
+// Post Card Component
+function PostCard({
+    post,
+    locale,
+    isOwner,
+    onLike,
+    onDelete
+}: {
+    post: Post;
+    locale: any;
+    isOwner: boolean;
+    onLike: () => void;
+    onDelete: () => void;
+}) {
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [showMenu, setShowMenu] = useState(false);
+
+    const images = post.image_urls || [];
+    const hasImages = images.length > 0;
+
+    return (
+        <div className="bg-[var(--card)] rounded-2xl border border-[var(--border)] overflow-hidden">
+            {/* Header */}
+            <div className="p-4 pb-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-indigo-500/10 overflow-hidden flex items-center justify-center text-xl border border-indigo-500/20">
+                        {post.profiles?.avatar_url ? (
+                            <img src={post.profiles.avatar_url} alt="av" className="h-full w-full object-cover" />
+                        ) : "🦎"}
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-[var(--foreground)]">
+                            {post.profiles?.full_name || post.profiles?.username || "Unknown"}
+                        </h3>
+                        <p className="text-[10px] text-[var(--muted)] font-medium">
+                            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale })}
+                        </p>
+                    </div>
+                </div>
+                {isOwner && (
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowMenu(!showMenu)}
+                            className="text-[var(--muted)] hover:text-[var(--foreground)] p-1"
+                        >
+                            <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                        {showMenu && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                                <div className="absolute right-0 top-6 z-20 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg overflow-hidden">
+                                    <button
+                                        onClick={() => { onDelete(); setShowMenu(false); }}
+                                        className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 w-full"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        <span className="text-sm">삭제</span>
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Content */}
+            {post.content && (
+                <p className="px-4 pb-3 text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-wrap">
+                    {post.content}
+                </p>
+            )}
+
+            {/* Images */}
+            {hasImages && (
+                <div className="relative">
+                    <div className="aspect-square bg-black/20 overflow-hidden">
+                        <img
+                            src={images[currentImageIndex]}
+                            alt=""
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+                    {images.length > 1 && (
+                        <>
+                            {currentImageIndex > 0 && (
+                                <button
+                                    onClick={() => setCurrentImageIndex(i => i - 1)}
+                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1"
+                                >
+                                    <ChevronLeft className="h-5 w-5" />
+                                </button>
+                            )}
+                            {currentImageIndex < images.length - 1 && (
+                                <button
+                                    onClick={() => setCurrentImageIndex(i => i + 1)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1"
+                                >
+                                    <ChevronRight className="h-5 w-5" />
+                                </button>
+                            )}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                                {images.map((_, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={cn(
+                                            "w-1.5 h-1.5 rounded-full",
+                                            idx === currentImageIndex ? "bg-white" : "bg-white/40"
+                                        )}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Actions */}
+            <div className="p-4 flex items-center justify-between border-t border-[var(--border)]">
+                <button
+                    onClick={onLike}
+                    className={cn(
+                        "flex items-center gap-1.5 transition-colors group",
+                        post.isLiked ? "text-red-500" : "text-[var(--muted)] hover:text-red-500"
+                    )}
+                >
+                    <Heart className={cn("h-5 w-5 group-hover:scale-110 transition-transform", post.isLiked && "fill-current")} />
+                    <span className="text-xs font-medium">{post.likes_count}</span>
+                </button>
+                <button className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--primary)] transition-colors">
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="text-xs font-medium">0</span>
+                </button>
+                <button className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+                    <Share2 className="h-5 w-5" />
+                </button>
+            </div>
         </div>
     );
 }

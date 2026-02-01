@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
     ArrowLeft, Trash2, Upload, Download, X, Settings2,
-    Palette, ChevronRight, Database, UserPlus, Users, Languages, LogOut
+    Palette, ChevronRight, Database, UserPlus, Users, Languages, LogOut, User, Loader2, Camera
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -18,7 +18,7 @@ import { ImageCropper } from "@/components/image-cropper";
 import { AuthDialog } from "@/components/auth-dialog";
 import { supabase } from "@/lib/supabase";
 
-type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data";
+type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data" | "profile";
 
 function SettingsContent() {
     const {
@@ -45,6 +45,17 @@ function SettingsContent() {
     const [rawImage, setRawImage] = useState<string | null>(null);
     const [isCropping, setIsCropping] = useState(false);
     const [showAuthDialog, setShowAuthDialog] = useState(false);
+
+    // Profile edit state
+    const [myProfile, setMyProfile] = useState<any>(null);
+    const [profileName, setProfileName] = useState("");
+    const [profileBio, setProfileBio] = useState("");
+    const [profileAvatar, setProfileAvatar] = useState("");
+    const [isProfileLoading, setIsProfileLoading] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const profileFileInputRef = useRef<HTMLInputElement>(null);
+    const [profileRawImage, setProfileRawImage] = useState<string | null>(null);
+    const [isProfileCropping, setIsProfileCropping] = useState(false);
 
     // Care Schedule state
     const [feedingEnabled, setFeedingEnabled] = useState(false);
@@ -107,6 +118,92 @@ function SettingsContent() {
         const v = searchParams.get("view") as SettingsView;
         if (v) setView(v);
     }, [searchParams]);
+
+    // Fetch user profile
+    useEffect(() => {
+        if (session?.user) {
+            setIsProfileLoading(true);
+            supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single()
+                .then(({ data }) => {
+                    if (data) {
+                        setMyProfile(data);
+                        setProfileName(data.full_name || "");
+                        setProfileBio(data.bio || "");
+                        setProfileAvatar(data.avatar_url || "");
+                    }
+                    setIsProfileLoading(false);
+                });
+        }
+    }, [session]);
+
+    const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                alert("이미지가 너무 큽니다 (최대 5MB)");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setProfileRawImage(reader.result as string);
+                setIsProfileCropping(true);
+            };
+            reader.readAsDataURL(file);
+            e.target.value = "";
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!session?.user) return;
+
+        setIsSavingProfile(true);
+        try {
+            let avatarUrl = profileAvatar;
+
+            // Upload new avatar if it's a data URL
+            if (profileAvatar.startsWith('data:')) {
+                const blob = await fetch(profileAvatar).then(r => r.blob());
+                const fileName = `${session.user.id}/${Date.now()}.jpg`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('avatars')
+                    .upload(fileName, blob, { upsert: true });
+
+                if (!uploadError) {
+                    const { data: urlData } = supabase.storage
+                        .from('avatars')
+                        .getPublicUrl(fileName);
+                    avatarUrl = urlData.publicUrl;
+                }
+            }
+
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: profileName,
+                    bio: profileBio,
+                    avatar_url: avatarUrl,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', session.user.id);
+
+            if (!error) {
+                setMyProfile({ ...myProfile, full_name: profileName, bio: profileBio, avatar_url: avatarUrl });
+                setProfileAvatar(avatarUrl);
+                setView("main");
+            } else {
+                alert("프로필 저장 실패: " + error.message);
+            }
+        } catch (err) {
+            console.error('Error saving profile:', err);
+            alert("프로필 저장 중 오류가 발생했습니다.");
+        }
+        setIsSavingProfile(false);
+    };
 
     // Constants
     const avatars = ["🦎", "🐍", "🐢", "🐸", "🐊", "🦖", "🥚", "🐲"];
@@ -179,7 +276,8 @@ function SettingsContent() {
                 view === "add_reptile" ? t("settings.add_profile") :
                     view === "edit_reptile" ? t("settings.edit_profile") :
                         view === "appearance" ? t("settings.sections.appearance") :
-                            t("settings.sections.data");
+                            view === "profile" ? "프로필 편집" :
+                                t("settings.sections.data");
 
         const backTarget = view === "main" ? "/" : () => setView(view === "add_reptile" || view === "edit_reptile" ? "reptiles" : "main");
 
@@ -201,6 +299,35 @@ function SettingsContent() {
 
     const renderMainView = () => (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {/* Profile Card */}
+            {session && (
+                <Card
+                    className="p-4 border-[var(--border)] hover:border-[var(--primary)] transition-all cursor-pointer group"
+                    onClick={() => setView("profile")}
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="h-14 w-14 rounded-full bg-slate-500/10 flex items-center justify-center overflow-hidden border-2 border-[var(--border)] group-hover:border-[var(--primary)] transition-colors">
+                                {profileAvatar ? (
+                                    <img src={profileAvatar} alt="Profile" className="h-full w-full object-cover" />
+                                ) : (
+                                    <User className="h-7 w-7 text-[var(--muted)]" />
+                                )}
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-[var(--foreground)]">
+                                    {profileName || session.user.email?.split('@')[0] || "내 프로필"}
+                                </h3>
+                                <p className="text-xs text-[var(--muted)]">
+                                    {profileBio || "프로필을 설정해주세요"}
+                                </p>
+                            </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
+                    </div>
+                </Card>
+            )}
+
             <div className="grid gap-4">
                 <Card
                     className="p-4 border-[var(--border)] hover:border-[var(--primary)] transition-all cursor-pointer group"
@@ -812,6 +939,111 @@ function SettingsContent() {
         </div>
     );
 
+    const renderProfileView = () => (
+        <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <Card className="p-6 border-[var(--primary)]/20 shadow-sm">
+                {isProfileLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {/* Avatar Picker */}
+                        <div className="flex flex-col items-center gap-4 pb-4 border-b border-[var(--border)]">
+                            <div className="relative h-24 w-24 rounded-full bg-slate-500/10 ring-4 ring-[var(--border)] flex items-center justify-center overflow-hidden">
+                                {profileAvatar ? (
+                                    <img src={profileAvatar} alt="Profile" className="h-full w-full object-cover" />
+                                ) : (
+                                    <User className="h-12 w-12 text-[var(--muted)]" />
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => profileFileInputRef.current?.click()}
+                                    className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity"
+                                >
+                                    <Camera className="h-6 w-6 text-white" />
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => profileFileInputRef.current?.click()}
+                                className="text-sm text-[var(--primary)] hover:underline"
+                            >
+                                프로필 사진 변경
+                            </button>
+                            <input
+                                type="file"
+                                ref={profileFileInputRef}
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleProfileImageChange}
+                            />
+                        </div>
+
+                        {/* Form Fields */}
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-xs font-medium text-[var(--muted)]">이름</label>
+                                <input
+                                    className="w-full rounded-xl bg-[var(--background)] border border-[var(--border)] p-3 text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                                    placeholder="이름을 입력하세요"
+                                    value={profileName}
+                                    onChange={e => setProfileName(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-medium text-[var(--muted)]">자기소개</label>
+                                <textarea
+                                    className="w-full rounded-xl bg-[var(--background)] border border-[var(--border)] p-3 text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] min-h-[100px]"
+                                    placeholder="자기소개를 입력하세요"
+                                    value={profileBio}
+                                    onChange={e => setProfileBio(e.target.value)}
+                                />
+                            </div>
+
+                            {session && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-[var(--muted)]">이메일</label>
+                                    <input
+                                        className="w-full rounded-xl bg-slate-500/5 border border-[var(--border)] p-3 text-[var(--muted)] cursor-not-allowed"
+                                        value={session.user.email || ""}
+                                        disabled
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 pt-4">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="flex-1"
+                                onClick={() => setView("main")}
+                            >
+                                취소
+                            </Button>
+                            <Button
+                                className="flex-1"
+                                onClick={handleSaveProfile}
+                                disabled={isSavingProfile}
+                            >
+                                {isSavingProfile ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        저장 중...
+                                    </>
+                                ) : (
+                                    "저장"
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Card>
+        </div>
+    );
+
     return (
         <main className="min-h-screen bg-[var(--background)] p-4 text-[var(--foreground)] md:p-8 pb-32">
             <div className="mx-auto max-w-2xl space-y-8">
@@ -824,6 +1056,7 @@ function SettingsContent() {
                     {view === "edit_reptile" && renderFormView()}
                     {view === "appearance" && renderAppearanceView()}
                     {view === "data" && renderDataView()}
+                    {view === "profile" && renderProfileView()}
                 </div>
             </div>
 
@@ -845,6 +1078,20 @@ function SettingsContent() {
                         onCancel={() => {
                             setIsCropping(false);
                             setRawImage(null);
+                        }}
+                    />
+                )}
+                {isProfileCropping && profileRawImage && (
+                    <ImageCropper
+                        image={profileRawImage}
+                        onCrop={(cropped) => {
+                            setProfileAvatar(cropped);
+                            setIsProfileCropping(false);
+                            setProfileRawImage(null);
+                        }}
+                        onCancel={() => {
+                            setIsProfileCropping(false);
+                            setProfileRawImage(null);
                         }}
                     />
                 )}
