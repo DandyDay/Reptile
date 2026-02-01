@@ -184,6 +184,8 @@ export default function CommunityPage() {
                 setNewPostContent("");
                 setSelectedImages([]);
                 setImagePreviews([]);
+                // Manually refresh posts since realtime might not be enabled
+                await fetchPosts();
             } else {
                 console.error('Post error:', error);
                 alert("게시 실패: " + error.message);
