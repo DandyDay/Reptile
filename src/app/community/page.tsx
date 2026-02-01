@@ -57,11 +57,14 @@ export default function CommunityPage() {
             .from('posts')
             .select(`
                 *,
-                profiles ( username, full_name, avatar_url )
+                *,
+                profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url )
             `)
             .order('created_at', { ascending: false });
 
-        if (!error && data) {
+        if (error) {
+            console.error("Error fetching posts:", error);
+        } else if (data) {
             // Check which posts the user has liked
             let likedPostIds: string[] = [];
             if (session?.user) {
