@@ -46,6 +46,7 @@ export default function CommunityPage() {
 
     // Profile State
     const [myProfile, setMyProfile] = useState<any>(null);
+    const [likingPostId, setLikingPostId] = useState<string | null>(null);
 
     const locale = visualSettings.language === 'ko' ? ko : enUS;
 
@@ -56,7 +57,6 @@ export default function CommunityPage() {
         const { data, error } = await supabase
             .from('posts')
             .select(`
-                *,
                 *,
                 profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url )
             `)
@@ -147,6 +147,8 @@ export default function CommunityPage() {
         if (!session?.user || selectedImages.length === 0) return [];
 
         const urls: string[] = [];
+        const failedFiles: string[] = [];
+
         for (const file of selectedImages) {
             const fileExt = file.name.split('.').pop();
             const fileName = `${session.user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -160,8 +162,16 @@ export default function CommunityPage() {
                     .from('posts')
                     .getPublicUrl(fileName);
                 urls.push(urlData.publicUrl);
+            } else {
+                console.error(`Failed to upload ${file.name}:`, error);
+                failedFiles.push(file.name);
             }
         }
+
+        if (failedFiles.length > 0) {
+            alert(`일부 이미지 업로드 실패: ${failedFiles.join(', ')}`);
+        }
+
         return urls;
     };
 
@@ -206,6 +216,17 @@ export default function CommunityPage() {
             return;
         }
 
+        // Prevent concurrent likes on the same post
+        if (likingPostId === postId) return;
+        setLikingPostId(postId);
+
+        // Store original state for rollback
+        const originalPost = posts.find(p => p.id === postId);
+        if (!originalPost) {
+            setLikingPostId(null);
+            return;
+        }
+
         // Optimistic update
         setPosts(prev => prev.map(p => {
             if (p.id === postId) {
@@ -218,27 +239,60 @@ export default function CommunityPage() {
             return p;
         }));
 
-        if (isLiked) {
-            await supabase
-                .from('likes')
-                .delete()
-                .eq('post_id', postId)
-                .eq('user_id', session.user.id);
+        try {
+            if (isLiked) {
+                const { error: deleteError } = await supabase
+                    .from('likes')
+                    .delete()
+                    .eq('post_id', postId)
+                    .eq('user_id', session.user.id);
 
-            await supabase
-                .from('posts')
-                .update({ likes_count: posts.find(p => p.id === postId)!.likes_count - 1 })
-                .eq('id', postId);
-        } else {
-            await supabase.from('likes').insert({
-                post_id: postId,
-                user_id: session.user.id
-            });
+                if (deleteError) throw deleteError;
 
-            await supabase
-                .from('posts')
-                .update({ likes_count: posts.find(p => p.id === postId)!.likes_count + 1 })
-                .eq('id', postId);
+                // Get current count from DB to avoid stale data
+                const { data: postData } = await supabase
+                    .from('posts')
+                    .select('likes_count')
+                    .eq('id', postId)
+                    .single();
+
+                const currentCount = postData?.likes_count || 0;
+                await supabase
+                    .from('posts')
+                    .update({ likes_count: Math.max(0, currentCount - 1) })
+                    .eq('id', postId);
+            } else {
+                const { error: insertError } = await supabase.from('likes').insert({
+                    post_id: postId,
+                    user_id: session.user.id
+                });
+
+                if (insertError) throw insertError;
+
+                // Get current count from DB to avoid stale data
+                const { data: postData } = await supabase
+                    .from('posts')
+                    .select('likes_count')
+                    .eq('id', postId)
+                    .single();
+
+                const currentCount = postData?.likes_count || 0;
+                await supabase
+                    .from('posts')
+                    .update({ likes_count: currentCount + 1 })
+                    .eq('id', postId);
+            }
+        } catch (error) {
+            console.error('Like error:', error);
+            // Rollback optimistic update
+            setPosts(prev => prev.map(p => {
+                if (p.id === postId) {
+                    return { ...p, isLiked: originalPost.isLiked, likes_count: originalPost.likes_count };
+                }
+                return p;
+            }));
+        } finally {
+            setLikingPostId(null);
         }
     };
 

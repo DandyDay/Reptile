@@ -821,17 +821,6 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         root.style.setProperty('--color-memo', colors.memo);
         root.style.setProperty('--destructive', colors.danger);
 
-        root.style.setProperty('--background', colors.background);
-        root.style.setProperty('--card', colors.card);
-        root.style.setProperty('--primary', colors.primary);
-        root.style.setProperty('--foreground', colors.text);
-        root.style.setProperty('--border', colors.border);
-        root.style.setProperty('--muted', colors.muted);
-        root.style.setProperty('--color-feeding', colors.feeding);
-        root.style.setProperty('--color-poop', colors.poop);
-        root.style.setProperty('--color-cleaning', colors.cleaning);
-        root.style.setProperty('--color-memo', colors.memo);
-
         // Add dynamic background radial gradients
         const gradientColor = visualSettings.theme === 'light' ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.15)';
         root.style.backgroundImage = `
