@@ -159,6 +159,12 @@
         "find_friends_desc": "Connect with other reptile keepers!",
         "guest_user": "Guest User",
         "no_bio": "No bio yet.",
-        "edit_profile": "Edit Profile"
+        "edit_profile": "Edit Profile",
+        "comments": "Comments",
+        "write_comment": "Write a comment...",
+        "no_comments": "No comments yet.",
+        "login_required": "Login required.",
+        "comment_failed": "Failed to post comment",
+        "share_success": "URL copied to clipboard."
     }
 }

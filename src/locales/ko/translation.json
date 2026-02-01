@@ -159,6 +159,12 @@
         "find_friends_desc": "같은 파충류를 키우는 친구들을 찾아보세요!",
         "guest_user": "게스트",
         "no_bio": "자기소개가 없습니다.",
-        "edit_profile": "프로필 수정"
+        "edit_profile": "프로필 수정",
+        "comments": "댓글",
+        "write_comment": "댓글 작성...",
+        "no_comments": "아직 댓글이 없습니다.",
+        "login_required": "로그인이 필요합니다.",
+        "comment_failed": "댓글 작성 실패",
+        "share_success": "URL이 복사되었습니다."
     }
 }

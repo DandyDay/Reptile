@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import {
     Users, MessageSquare, Heart, X, Image as ImageIcon,
     MoreHorizontal, Share2, MessageCircle, ChevronLeft, ChevronRight,
-    LogIn, LogOut, Loader2, Trash2
+    LogIn, LogOut, Loader2, Trash2, Send
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AuthDialog } from "@/components/auth-dialog";
@@ -28,6 +28,18 @@ interface Post {
         avatar_url: string;
     } | null;
     isLiked?: boolean;
+}
+
+interface Comment {
+    id: string;
+    content: string;
+    created_at: string;
+    user_id: string;
+    profiles: {
+        username: string;
+        full_name: string;
+        avatar_url: string;
+    } | null;
 }
 
 export default function CommunityPage() {
@@ -445,6 +457,7 @@ function PostCard({
     onLike: () => void;
     onDelete: () => void;
 }) {
+    const { t } = useTranslation();
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [showMenu, setShowMenu] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -510,6 +523,105 @@ function PostCard({
         scrollRef.current.scrollLeft = scrollLeft.current - walk;
     };
 
+    const [showComments, setShowComments] = useState(false);
+    const [comments, setComments] = useState<Comment[]>([]);
+    const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+    const [newComment, setNewComment] = useState("");
+    const [isSendingComment, setIsSendingComment] = useState(false);
+    const [commentCount, setCommentCount] = useState(0); // Optional: if we fetched count
+    const [hasLoadedComments, setHasLoadedComments] = useState(false);
+
+    // Initial load of comment count (optional optimization)
+    // For now, we'll just fetch comments when toggled or lazy load count? 
+    // Let's just fetch everything when toggled for simplicity first.
+
+    const fetchComments = async () => {
+        setIsCommentsLoading(true);
+        const { data, error } = await supabase
+            .from('comments')
+            .select(`
+                *,
+                profiles ( username, full_name, avatar_url )
+            `)
+            .eq('post_id', post.id)
+            .order('created_at', { ascending: true });
+
+        if (!error && data) {
+            setComments(data as any);
+            setCommentCount(data.length);
+        }
+        setIsCommentsLoading(false);
+        setHasLoadedComments(true);
+    };
+
+    const toggleComments = () => {
+        if (!showComments && !hasLoadedComments) {
+            fetchComments();
+        }
+        setShowComments(!showComments);
+    };
+
+    const handleSendComment = async () => {
+        if (!newComment.trim()) return;
+
+        // We need session to comment. 
+        // PostCard doesn't have session prop directly but `isOwner` check implies we have session access in parent.
+        // However, we should check session existence.
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+            alert(t("community.login_required"));
+            return;
+        }
+
+        setIsSendingComment(true);
+        const { data, error } = await supabase
+            .from('comments')
+            .insert({
+                content: newComment,
+                post_id: post.id,
+                user_id: session.user.id
+            })
+            .select(`
+                *,
+                profiles ( username, full_name, avatar_url )
+            `)
+            .single();
+
+        if (!error && data) {
+            setComments(prev => [...prev, data as any]);
+            setCommentCount(prev => prev + 1);
+            setNewComment("");
+        } else {
+            console.error(error);
+            alert(t("community.comment_failed"));
+        }
+        setIsSendingComment(false);
+    };
+
+    const handleShare = async () => {
+        const shareData = {
+            title: 'ReptileLog',
+            text: post.content || 'Check out this reptile!',
+            url: window.location.href, // This might be just the feed URL, but better than nothing
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                console.log('Error sharing', err);
+            }
+        } else {
+            navigator.clipboard.writeText(window.location.href);
+            alert(t("community.share_success"));
+        }
+    };
+
+    // Calculate count from initial load if possible, but for now we rely on fetch
+    // A better approach would be to fetch comment counts in the main feed query.
+    // We'll leave the count as 0 initially or '...' until clicked for MVP.
+
     return (
         <div className="bg-[var(--card)] rounded-2xl border border-[var(--border)] overflow-hidden">
             {/* Header */}
@@ -546,7 +658,7 @@ function PostCard({
                                         className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 w-full"
                                     >
                                         <Trash2 className="h-4 w-4" />
-                                        <span className="text-sm">삭제</span>
+                                        <span className="text-sm">{t("common.delete")}</span>
                                     </button>
                                 </div>
                             </>
@@ -636,14 +748,90 @@ function PostCard({
                     <Heart className={cn("h-5 w-5 group-hover:scale-110 transition-transform", post.isLiked && "fill-current")} />
                     <span className="text-xs font-medium">{post.likes_count}</span>
                 </button>
-                <button className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--primary)] transition-colors">
+                <button
+                    onClick={toggleComments}
+                    className={cn(
+                        "flex items-center gap-1.5 transition-colors",
+                        showComments ? "text-[var(--primary)]" : "text-[var(--muted)] hover:text-[var(--primary)]"
+                    )}
+                >
                     <MessageCircle className="h-5 w-5" />
-                    <span className="text-xs font-medium">0</span>
+                    <span className="text-xs font-medium">{commentCount > 0 ? commentCount : t("community.comments")}</span>
                 </button>
-                <button className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+                <button
+                    onClick={handleShare}
+                    className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                >
                     <Share2 className="h-5 w-5" />
                 </button>
             </div>
+
+            {/* Comments Section */}
+            <AnimatePresence>
+                {showComments && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden border-t border-[var(--border)] bg-[var(--background)]/50"
+                    >
+                        <div className="p-4 space-y-4">
+                            {/* Comment Input */}
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder={t("community.write_comment")}
+                                    className="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-full px-4 py-2 text-sm outline-none focus:border-[var(--primary)]"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSendComment()}
+                                />
+                                <button
+                                    onClick={handleSendComment}
+                                    disabled={!newComment.trim() || isSendingComment}
+                                    className="p-2 bg-[var(--primary)] text-white rounded-full disabled:opacity-50"
+                                >
+                                    {isSendingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                </button>
+                            </div>
+
+                            {/* Comment List */}
+                            {isCommentsLoading ? (
+                                <div className="text-center py-4">
+                                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-[var(--muted)]" />
+                                </div>
+                            ) : comments.length === 0 ? (
+                                <p className="text-center text-xs text-[var(--muted)] py-2">{t("community.no_comments")}</p>
+                            ) : (
+                                <div className="space-y-3 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                                    {comments.map((comment) => (
+                                        <div key={comment.id} className="flex gap-2.5">
+                                            <div className="h-8 w-8 rounded-full bg-slate-500/20 shrink-0 overflow-hidden">
+                                                {comment.profiles?.avatar_url ? (
+                                                    <img src={comment.profiles.avatar_url} alt="" className="h-full w-full object-cover" />
+                                                ) : "👤"}
+                                            </div>
+                                            <div className="flex-1 space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-[var(--foreground)]">
+                                                        {comment.profiles?.full_name || "Unknown"}
+                                                    </span>
+                                                    <span className="text-[10px] text-[var(--muted)]">
+                                                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true, locale })}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-[var(--foreground)] leading-snug">
+                                                    {comment.content}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

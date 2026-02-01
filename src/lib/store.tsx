@@ -222,6 +222,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 const { data: reptilesData } = await supabase
                     .from('reptiles')
                     .select('*')
+                    .eq('user_id', session.user.id)
                     .order('created_at', { ascending: true });
 
                 if (reptilesData) {
@@ -247,6 +248,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 const { data: logsData } = await supabase
                     .from('logs')
                     .select('*')
+                    .eq('user_id', session.user.id)
                     .order('date', { ascending: false });
 
                 if (logsData) {
@@ -267,6 +269,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 const { data: presetsData } = await supabase
                     .from('food_presets')
                     .select('*')
+                    .eq('user_id', session.user.id)
                     .order('created_at', { ascending: true });
 
                 if (presetsData) {
@@ -388,6 +391,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             const { data: reptilesData } = await supabase
                 .from('reptiles')
                 .select('*')
+                .eq('user_id', userId)
                 .order('created_at', { ascending: true });
 
             if (reptilesData) {
@@ -412,6 +416,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             const { data: logsData } = await supabase
                 .from('logs')
                 .select('*')
+                .eq('user_id', userId)
                 .order('date', { ascending: false });
 
             if (logsData) {
@@ -431,6 +436,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             const { data: presetsData } = await supabase
                 .from('food_presets')
                 .select('*')
+                .eq('user_id', userId)
                 .order('created_at', { ascending: true });
 
             if (presetsData) {
