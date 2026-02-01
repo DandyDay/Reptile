@@ -299,7 +299,13 @@ export function CalendarView() {
                                                     : "bg-slate-500/5 border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/30"
                                             )}
                                         >
-                                            <span className="text-2xl">{reptile.avatar}</span>
+                                            {reptile.avatar.startsWith('data:') || reptile.avatar.startsWith('http') ? (
+                                                <div className="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center bg-slate-500/10 border border-[var(--border)]">
+                                                    <img src={reptile.avatar} alt={reptile.name} className="h-full w-full object-cover" />
+                                                </div>
+                                            ) : (
+                                                <span className="text-2xl">{reptile.avatar}</span>
+                                            )}
                                             <div className="text-left">
                                                 <p className={cn("text-sm font-bold", selectedReptileForLog === reptile.id ? "text-white" : "text-[var(--foreground)]")}>
                                                     {reptile.name}

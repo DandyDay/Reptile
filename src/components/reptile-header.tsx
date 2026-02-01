@@ -16,7 +16,7 @@ export function ReptileHeader() {
             {reptiles.map((reptile) => {
                 const isSelected = selectedReptileId === reptile.id;
                 // Check if avatar is an emoji (short string) or an image URL (long string starting with data:)
-                const isImage = reptile.avatar.startsWith("data:");
+                const isImage = reptile.avatar.startsWith("data:") || reptile.avatar.startsWith("http");
 
                 return (
                     <button

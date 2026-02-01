@@ -91,7 +91,7 @@ function SettingsContent() {
             setName(r.name);
             setSpecies(r.species);
             setAvatar(r.avatar);
-            setIsEmojiMode(!r.avatar.startsWith('data:'));
+            setIsEmojiMode(!r.avatar.startsWith('data:') && !r.avatar.startsWith('http'));
             setBirthday(r.birthday || "");
             setNotes(r.notes || "");
 
@@ -432,7 +432,7 @@ function SettingsContent() {
                     >
                         <div className="flex items-center gap-4">
                             <div className="h-12 w-12 overflow-hidden rounded-full bg-slate-500/20 flex items-center justify-center border border-[var(--border)] shrink-0">
-                                {r.avatar.startsWith('data:') ? (
+                                {r.avatar.startsWith('data:') || r.avatar.startsWith('http') ? (
                                     <img src={r.avatar} alt={r.name} className="h-full w-full object-cover" />
                                 ) : (
                                     <span className="text-2xl">{r.avatar}</span>
@@ -473,7 +473,7 @@ function SettingsContent() {
                     {/* Avatar Picker */}
                     <div className="flex flex-col items-center gap-4 pb-4 border-b border-[var(--border)]">
                         <div className="relative h-24 w-24 rounded-full bg-slate-500/10 ring-4 ring-[var(--border)] flex items-center justify-center overflow-hidden">
-                            {avatar.startsWith("data:") ? (
+                            {avatar.startsWith("data:") || avatar.startsWith("http") ? (
                                 <img src={avatar} alt="Preview" className="h-full w-full object-cover" />
                             ) : (
                                 <span className="text-4xl">{avatar}</span>
