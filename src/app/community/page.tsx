@@ -447,9 +447,68 @@ function PostCard({
 }) {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [showMenu, setShowMenu] = useState(false);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     const images = post.image_urls || [];
     const hasImages = images.length > 0;
+
+    // Drag to scroll state
+    const isDragging = useRef(false);
+    const startX = useRef(0);
+    const scrollLeft = useRef(0);
+
+    const handleScroll = () => {
+        if (!scrollRef.current) return;
+        const index = Math.round(scrollRef.current.scrollLeft / scrollRef.current.offsetWidth);
+        setCurrentImageIndex(index);
+    };
+
+    const scrollTo = (index: number) => {
+        if (!scrollRef.current) return;
+        scrollRef.current.scrollTo({
+            left: index * scrollRef.current.offsetWidth,
+            behavior: 'smooth'
+        });
+    };
+
+    const onMouseDown = (e: React.MouseEvent) => {
+        if (!scrollRef.current) return;
+        isDragging.current = true;
+        startX.current = e.pageX - scrollRef.current.offsetLeft;
+        scrollLeft.current = scrollRef.current.scrollLeft;
+        scrollRef.current.style.scrollBehavior = 'auto'; // Disable smooth scroll while dragging
+        scrollRef.current.style.cursor = 'grabbing';
+    };
+
+    const onMouseLeave = () => {
+        if (!isDragging.current) return;
+        isDragging.current = false;
+        if (scrollRef.current) {
+            scrollRef.current.style.scrollBehavior = 'smooth';
+            scrollRef.current.style.cursor = 'grab';
+        }
+    };
+
+    const onMouseUp = () => {
+        if (!isDragging.current) return;
+        isDragging.current = false;
+        if (scrollRef.current) {
+            scrollRef.current.style.scrollBehavior = 'smooth';
+            scrollRef.current.style.cursor = 'grab';
+
+            // Snap to nearest image on release
+            const index = Math.round(scrollRef.current.scrollLeft / scrollRef.current.offsetWidth);
+            scrollTo(index);
+        }
+    };
+
+    const onMouseMove = (e: React.MouseEvent) => {
+        if (!isDragging.current || !scrollRef.current) return;
+        e.preventDefault();
+        const x = e.pageX - scrollRef.current.offsetLeft;
+        const walk = (x - startX.current) * 1.5; // Scroll speed multiplier
+        scrollRef.current.scrollLeft = scrollLeft.current - walk;
+    };
 
     return (
         <div className="bg-[var(--card)] rounded-2xl border border-[var(--border)] overflow-hidden">
@@ -505,39 +564,57 @@ function PostCard({
 
             {/* Images */}
             {hasImages && (
-                <div className="relative">
-                    <div className="aspect-square bg-black/20 overflow-hidden">
-                        <img
-                            src={images[currentImageIndex]}
-                            alt=""
-                            className="w-full h-full object-cover"
-                        />
+                <div className="relative group">
+                    <div
+                        ref={scrollRef}
+                        onScroll={handleScroll}
+                        onMouseDown={onMouseDown}
+                        onMouseLeave={onMouseLeave}
+                        onMouseUp={onMouseUp}
+                        onMouseMove={onMouseMove}
+                        className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none cursor-grab active:cursor-grabbing"
+                    >
+                        {images.map((url, idx) => (
+                            <div key={idx} className="min-w-full aspect-square bg-black/20 overflow-hidden snap-center relative">
+                                <img
+                                    src={url}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        ))}
                     </div>
                     {images.length > 1 && (
                         <>
                             {currentImageIndex > 0 && (
                                 <button
-                                    onClick={() => setCurrentImageIndex(i => i - 1)}
-                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        scrollTo(currentImageIndex - 1);
+                                    }}
+                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                     <ChevronLeft className="h-5 w-5" />
                                 </button>
                             )}
                             {currentImageIndex < images.length - 1 && (
                                 <button
-                                    onClick={() => setCurrentImageIndex(i => i + 1)}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        scrollTo(currentImageIndex + 1);
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                     <ChevronRight className="h-5 w-5" />
                                 </button>
                             )}
-                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 p-1 rounded-full bg-black/20 backdrop-blur-sm">
                                 {images.map((_, idx) => (
                                     <div
                                         key={idx}
                                         className={cn(
-                                            "w-1.5 h-1.5 rounded-full",
-                                            idx === currentImageIndex ? "bg-white" : "bg-white/40"
+                                            "w-1.5 h-1.5 rounded-full transition-all duration-300",
+                                            idx === currentImageIndex ? "bg-white w-3" : "bg-white/40"
                                         )}
                                     />
                                 ))}
