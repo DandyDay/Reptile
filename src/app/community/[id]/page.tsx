@@ -186,7 +186,7 @@ export default function PostDetailPage() {
             <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-[var(--background)]/80 border-b border-[var(--border)]">
                 <div className="px-4 h-14 flex items-center gap-4">
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => router.push('/community')}
                         className="p-1 -ml-1 rounded-full hover:bg-[var(--secondary)] transition-colors"
                     >
                         <ChevronLeft className="h-6 w-6" />

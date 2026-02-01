@@ -164,21 +164,23 @@ export function PostCard({
 
     const handleShare = async () => {
         const shareUrl = `${window.location.origin}/community/${post.id}`;
-        const shareData = {
-            title: 'ReptileLog',
-            text: post.content || 'Check out this reptile!',
-            url: shareUrl,
-        };
 
         if (navigator.share) {
             try {
-                await navigator.share(shareData);
+                await navigator.share({
+                    url: shareUrl
+                });
             } catch (err) {
                 console.log('Error sharing', err);
             }
         } else {
-            navigator.clipboard.writeText(shareUrl);
-            alert(t("community.share_success"));
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                alert(t("community.share_success"));
+            } catch (err) {
+                console.error('Failed to copy', err);
+                alert("링크 복사에 실패했습니다.");
+            }
         }
     };
 
