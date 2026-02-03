@@ -57,6 +57,7 @@ export function CalendarView() {
     const [formDate, setFormDate] = useState<Date>(new Date());
     const [formTime, setFormTime] = useState(format(new Date(), "HH:mm"));
     const [selectedReptileForLog, setSelectedReptileForLog] = useState<string>("");
+    const [feedingWeight, setFeedingWeight] = useState("");
 
     const daysInMonth = eachDayOfInterval({
         start: startOfWeek(startOfMonth(currentMonth)),
@@ -81,6 +82,7 @@ export function CalendarView() {
         setQuantity("5");
         setSelectedEmoji(null);
         setSelectedReptileForLog("");
+        setFeedingWeight("");
     };
 
     const openForm = () => {
@@ -101,6 +103,18 @@ export function CalendarView() {
     const handleSubmitLog = () => {
         if (!logType) return;
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const checkDate = new Date(formDate);
+        checkDate.setHours(0, 0, 0, 0);
+
+        if (checkDate > today && ['feeding', 'poop', 'cleaning'].includes(logType)) {
+            alert(t("calendar.future_log_warning")); // You might want to add this translation key or just use a hardcoded string for now if translation is missing. 
+            // Better to just return or handle gracefuly.
+            // using a simple return for now, UI will be disabled anyway.
+            return;
+        }
+
         let finalDetails = details;
         if (logType !== 'feeding' && !finalDetails) {
             if (logType === 'poop') finalDetails = t("calendar.condition_normal");
@@ -112,25 +126,7 @@ export function CalendarView() {
         const [hours, minutes] = formTime.split(':').map(Number);
         combinedDate.setHours(hours, minutes);
 
-        // Handle weight log specific details
-        if (logType === 'weight') {
-            const weightVal = parseFloat(quantity);
-            if (!isNaN(weightVal)) {
-                finalDetails = `${weightVal}g`;
 
-                addLog({
-                    type: logType,
-                    date: combinedDate.toISOString(),
-                    note,
-                    details: finalDetails,
-                    emoji: selectedEmoji || undefined,
-                    weight: weightVal,
-                    reptileId: selectedReptileForLog
-                });
-                resetForm();
-                return;
-            }
-        }
 
         addLog({
             type: logType,
@@ -140,6 +136,21 @@ export function CalendarView() {
             emoji: selectedEmoji || undefined,
             reptileId: selectedReptileForLog
         });
+
+        // Add additional weight log if provided during feeding
+        if (logType === 'feeding' && feedingWeight) {
+            const weightVal = parseFloat(feedingWeight);
+            if (!isNaN(weightVal)) {
+                addLog({
+                    type: 'weight',
+                    date: combinedDate.toISOString(),
+                    details: `${weightVal}g`,
+                    weight: weightVal,
+                    reptileId: selectedReptileForLog
+                });
+            }
+        }
+
         resetForm();
     };
 
@@ -228,7 +239,9 @@ export function CalendarView() {
                                             badgeType === 'overdue'
                                                 ? "bg-red-500/10 text-red-500 border-red-500/20"
                                                 : "bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20"
-                                        )}>
+                                        )}
+
+                                        >
                                             {badgeType === 'overdue' ? t("calendar.overdue_badge") : t("calendar.scheduled_tasks")}
                                         </div>
                                     );
@@ -246,12 +259,14 @@ export function CalendarView() {
                     <Trash2 className="h-4 w-4" />
                 </button>
             </div>
-            {log.note && (
-                <div className="ml-16 bg-white/5 p-3 rounded-xl text-[11px] text-[var(--muted)] italic border border-[var(--border)]/50 leading-relaxed shadow-inner">
-                    "{log.note}"
-                </div>
-            )}
-        </div>
+            {
+                log.note && (
+                    <div className="ml-16 bg-white/5 p-3 rounded-xl text-[11px] text-[var(--muted)] italic border border-[var(--border)]/50 leading-relaxed shadow-inner">
+                        "{log.note}"
+                    </div>
+                )
+            }
+        </div >
     );
 
     const renderModal = () => (
@@ -298,14 +313,19 @@ export function CalendarView() {
                                                     ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-lg shadow-[var(--primary)]/30 scale-105"
                                                     : "bg-slate-500/5 border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/30"
                                             )}
+
+
                                         >
-                                            {reptile.avatar.startsWith('data:') || reptile.avatar.startsWith('http') ? (
-                                                <div className="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center bg-slate-500/10 border border-[var(--border)]">
-                                                    <img src={reptile.avatar} alt={reptile.name} className="h-full w-full object-cover" />
-                                                </div>
-                                            ) : (
-                                                <span className="text-2xl">{reptile.avatar}</span>
-                                            )}
+                                            {
+                                                reptile.avatar.startsWith('data:') || reptile.avatar.startsWith('http') ? (
+                                                    <div className="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center bg-slate-500/10 border border-[var(--border)]">
+                                                        <img src={reptile.avatar} alt={reptile.name} className="h-full w-full object-cover" />
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-2xl">{reptile.avatar}</span>
+                                                )
+                                            }
+
                                             <div className="text-left">
                                                 <p className={cn("text-sm font-bold", selectedReptileForLog === reptile.id ? "text-white" : "text-[var(--foreground)]")}>
                                                     {reptile.name}
@@ -323,27 +343,37 @@ export function CalendarView() {
                             <div className="space-y-4">
                                 <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.log_type_title")}</h3>
                                 <div className="flex justify-between items-center px-4 bg-slate-500/5 p-6 rounded-[32px] border border-[var(--border)]/30">
-                                    {(['feeding', 'poop', 'cleaning', 'weight', 'memo'] as const).map((type) => {
+                                    {(['feeding', 'poop', 'cleaning', 'memo'] as const).map((type) => {
                                         const Icon = type === 'feeding' ? Utensils :
                                             type === 'poop' ? Droplets :
-                                                type === 'cleaning' ? Sparkles :
-                                                    type === 'weight' ? Scale : StickyNote;
+                                                type === 'cleaning' ? Sparkles : StickyNote;
                                         const colors = {
                                             feeding: "rgb(249, 115, 22)",
                                             poop: "rgb(168, 85, 247)",
                                             cleaning: "rgb(34, 197, 94)",
-                                            weight: "rgb(59, 130, 246)", // blue-500
                                             memo: "rgb(234, 179, 8)"
                                         };
                                         const isSelected = logType === type;
+
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+                                        const checkDate = new Date(formDate);
+                                        checkDate.setHours(0, 0, 0, 0);
+                                        const isFuture = checkDate > today;
+                                        const isDisabled = isFuture && type !== 'memo';
+
                                         return (
                                             <div key={type} className="flex flex-col items-center gap-3">
                                                 <button
-                                                    onClick={() => setLogType(type)}
+                                                    onClick={() => !isDisabled && setLogType(type)}
+                                                    disabled={isDisabled}
                                                     className={cn(
                                                         "h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-300",
-                                                        isSelected ? "scale-110 shadow-xl" : "opacity-30 grayscale hover:opacity-100 hover:grayscale-0"
+                                                        isSelected ? "scale-110 shadow-xl" : "opacity-30 grayscale hover:opacity-100 hover:grayscale-0",
+                                                        isDisabled && "opacity-10 grayscale cursor-not-allowed hover:opacity-10 hover:grayscale"
                                                     )}
+
+
                                                     style={{
                                                         backgroundColor: colors[type],
                                                         boxShadow: isSelected ? `0 12px 24px -6px ${colors[type]}80` : 'none'
@@ -351,7 +381,7 @@ export function CalendarView() {
                                                 >
                                                     <Icon className="h-6 w-6 text-white" />
                                                 </button>
-                                                <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", isSelected ? "text-[var(--foreground)]" : "text-[var(--muted)]")}>
+                                                <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", isSelected ? "text-[var(--foreground)]" : "text-[var(--muted)]", isDisabled && "opacity-20")}>
                                                     {t(`calendar.${type}` as any)}
                                                 </span>
                                             </div>
@@ -373,7 +403,7 @@ export function CalendarView() {
                                         />
                                         <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--primary)] opacity-60" />
                                     </div>
-                                    {(logType === 'feeding' || logType === 'weight') && (
+                                    {logType === 'feeding' && (
                                         <div className="relative w-40 animate-in slide-in-from-right-4 duration-300">
                                             <input
                                                 type="time"
@@ -384,47 +414,99 @@ export function CalendarView() {
                                             <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--primary)] opacity-60" />
                                         </div>
                                     )}
+
                                 </div>
                             </div>
 
                             {/* Specific Section: Feeding */}
-                            {logType === 'feeding' && (
-                                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                    <div className="space-y-4">
-                                        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.food_presets")}</h3>
-                                        <div className="flex flex-wrap gap-2">
-                                            {foodPresets.map(preset => (
-                                                <button
-                                                    key={preset.id}
-                                                    onClick={() => {
-                                                        setSelectedPreset(preset.id);
-                                                        setSelectedEmoji(preset.emoji);
-                                                        setDetails(`${preset.emoji} ${preset.name} ${quantity}${preset.unit}`);
-                                                    }}
-                                                    className={cn(
-                                                        "px-4 py-2.5 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 shadow-sm",
-                                                        selectedPreset === preset.id
-                                                            ? "bg-[var(--primary)] text-white border-[var(--primary)] scale-105"
-                                                            : "bg-slate-500/5 border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)]/30"
-                                                    )}
-                                                >
-                                                    <span className="text-lg">{preset.emoji}</span> {preset.name}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {selectedPreset && (
+                            {
+                                logType === 'feeding' && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                         <div className="space-y-4">
-                                            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.quantity")}</h3>
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.food_presets")}</h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                {foodPresets.map(preset => (
+                                                    <button
+                                                        key={preset.id}
+                                                        onClick={() => {
+                                                            setSelectedPreset(preset.id);
+                                                            setSelectedEmoji(preset.emoji);
+                                                            setDetails(`${preset.emoji} ${preset.name} ${quantity}${preset.unit}`);
+                                                        }}
+                                                        className={cn(
+                                                            "px-4 py-2.5 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 shadow-sm",
+                                                            selectedPreset === preset.id
+                                                                ? "bg-[var(--primary)] text-white border-[var(--primary)] scale-105"
+                                                                : "bg-slate-500/5 border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)]/30"
+                                                        )}
+
+
+                                                    >
+                                                        <span className="text-lg">{preset.emoji}</span> {preset.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {
+                                            selectedPreset && (
+                                                <div className="space-y-4">
+                                                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.quantity")}</h3>
+                                                    <div className="flex items-center justify-between bg-slate-500/5 border border-[var(--border)] rounded-[24px] p-2 pr-6">
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newQty = Math.max(1, parseInt(quantity) - 1).toString();
+                                                                    setQuantity(newQty);
+                                                                    const preset = foodPresets.find(p => p.id === selectedPreset);
+                                                                    if (preset) setDetails(`${preset.emoji} ${preset.name} ${newQty}${preset.unit}`);
+                                                                }}
+                                                                className="h-12 w-12 rounded-2xl bg-[var(--background)] flex items-center justify-center text-xl font-black text-[var(--foreground)] shadow-sm active:scale-90 transition-transform"
+                                                            >
+                                                                -
+                                                            </button>
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                value={quantity}
+                                                                onChange={(e) => {
+                                                                    setQuantity(e.target.value);
+                                                                    const preset = foodPresets.find(p => p.id === selectedPreset);
+                                                                    if (preset) setDetails(`${preset.emoji} ${preset.name} ${e.target.value}${preset.unit}`);
+                                                                }}
+                                                                className="w-20 bg-transparent text-center text-xl font-black text-[var(--foreground)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                            />
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newQty = (parseInt(quantity) + 1).toString();
+                                                                    setQuantity(newQty);
+                                                                    const preset = foodPresets.find(p => p.id === selectedPreset);
+                                                                    if (preset) setDetails(`${preset.emoji} ${preset.name} ${newQty}${preset.unit}`);
+                                                                }}
+                                                                className="h-12 w-12 rounded-2xl bg-[var(--primary)] flex items-center justify-center text-xl font-black text-white shadow-lg shadow-[var(--primary)]/20 active:scale-95 transition-transform"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+                                                        <span className="text-xs font-black text-[var(--muted)] uppercase tracking-widest ml-4">
+                                                            {foodPresets.find(p => p.id === selectedPreset)?.unit}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        }
+
+                                        <div className="space-y-4">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">
+                                                {t("calendar.weight")} <span className="text-[10px] opacity-60 normal-case">(Optional)</span>
+                                            </h3>
                                             <div className="flex items-center justify-between bg-slate-500/5 border border-[var(--border)] rounded-[24px] p-2 pr-6">
                                                 <div className="flex items-center gap-1">
                                                     <button
                                                         onClick={() => {
-                                                            const newQty = Math.max(1, parseInt(quantity) - 1).toString();
-                                                            setQuantity(newQty);
-                                                            const preset = foodPresets.find(p => p.id === selectedPreset);
-                                                            if (preset) setDetails(`${preset.emoji} ${preset.name} ${newQty}${preset.unit}`);
+                                                            const current = feedingWeight ? parseFloat(feedingWeight) : 0;
+                                                            const newQty = Math.max(0, current - 1).toString();
+                                                            setFeedingWeight(newQty === "0" ? "" : newQty);
                                                         }}
                                                         className="h-12 w-12 rounded-2xl bg-[var(--background)] flex items-center justify-center text-xl font-black text-[var(--foreground)] shadow-sm active:scale-90 transition-transform"
                                                     >
@@ -432,136 +514,74 @@ export function CalendarView() {
                                                     </button>
                                                     <input
                                                         type="number"
-                                                        min="1"
-                                                        value={quantity}
-                                                        onChange={(e) => {
-                                                            setQuantity(e.target.value);
-                                                            const preset = foodPresets.find(p => p.id === selectedPreset);
-                                                            if (preset) setDetails(`${preset.emoji} ${preset.name} ${e.target.value}${preset.unit}`);
-                                                        }}
-                                                        className="w-20 bg-transparent text-center text-xl font-black text-[var(--foreground)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        step="0.1"
+                                                        value={feedingWeight}
+                                                        onChange={(e) => setFeedingWeight(e.target.value)}
+                                                        placeholder="0"
+                                                        className="w-20 bg-transparent text-center text-xl font-black text-[var(--foreground)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none placeholder:text-[var(--muted)]/30"
                                                     />
                                                     <button
                                                         onClick={() => {
-                                                            const newQty = (parseInt(quantity) + 1).toString();
-                                                            setQuantity(newQty);
-                                                            const preset = foodPresets.find(p => p.id === selectedPreset);
-                                                            if (preset) setDetails(`${preset.emoji} ${preset.name} ${newQty}${preset.unit}`);
+                                                            const current = feedingWeight ? parseFloat(feedingWeight) : 0;
+                                                            setFeedingWeight((current + 1).toString());
                                                         }}
-                                                        className="h-12 w-12 rounded-2xl bg-[var(--primary)] flex items-center justify-center text-xl font-black text-white shadow-lg shadow-[var(--primary)]/20 active:scale-95 transition-transform"
+                                                        className="h-12 w-12 rounded-2xl bg-[var(--background)] flex items-center justify-center text-xl font-black text-[var(--foreground)] shadow-sm active:scale-90 transition-transform"
                                                     >
                                                         +
                                                     </button>
                                                 </div>
                                                 <span className="text-xs font-black text-[var(--muted)] uppercase tracking-widest ml-4">
-                                                    {foodPresets.find(p => p.id === selectedPreset)?.unit}
+                                                    g
                                                 </span>
                                             </div>
                                         </div>
-                                    )}
 
-                                    <div className="space-y-4">
-                                        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.details")}</h3>
-                                        <input
-                                            className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                                            placeholder={t("calendar.placeholder_feeding")}
-                                            value={details}
-                                            onChange={e => setDetails(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {logType === 'weight' && (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">
-                                        {t("calendar.weight")}
-                                    </h3>
-                                    <div className="flex items-center justify-between bg-slate-500/5 border border-[var(--border)] rounded-[24px] p-2 pr-6">
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => {
-                                                    const newQty = Math.max(0, parseFloat(quantity) - 1).toString();
-                                                    setQuantity(newQty);
-                                                    setDetails(`${newQty}g`);
-                                                }}
-                                                className="h-12 w-12 rounded-2xl bg-[var(--background)] flex items-center justify-center text-xl font-black text-[var(--foreground)] shadow-sm active:scale-90 transition-transform"
-                                            >
-                                                -
-                                            </button>
+                                        <div className="space-y-4">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.details")}</h3>
                                             <input
-                                                type="number"
-                                                step="0.1"
-                                                value={quantity}
-                                                onChange={(e) => {
-                                                    setQuantity(e.target.value);
-                                                    setDetails(`${e.target.value}g`);
-                                                }}
-                                                className="w-20 bg-transparent text-center text-xl font-black text-[var(--foreground)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                                                placeholder={t("calendar.placeholder_feeding")}
+                                                value={details}
+                                                onChange={e => setDetails(e.target.value)}
                                             />
-                                            <button
-                                                onClick={() => {
-                                                    const newQty = (parseFloat(quantity) + 1).toString();
-                                                    setQuantity(newQty);
-                                                    setDetails(`${newQty}g`);
-                                                }}
-                                                className="h-12 w-12 rounded-2xl bg-[var(--primary)] flex items-center justify-center text-xl font-black text-white shadow-lg shadow-[var(--primary)]/20 active:scale-95 transition-transform"
-                                            >
-                                                +
-                                            </button>
                                         </div>
-                                        <span className="text-xs font-black text-[var(--muted)] uppercase tracking-widest ml-4">
-                                            g
-                                        </span>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.details")}</h3>
-                                        <input
-                                            className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                                            placeholder={t("calendar.placeholder_weight")}
-                                            value={details}
-                                            onChange={e => setDetails(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                            )}
+                                    </div >
+                                )
+                            }
+
+
 
                             {/* Common: Details/Notes */}
-                            {logType !== 'feeding' && logType !== 'weight' && (
-                                <div className="space-y-4">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">
-                                        {logType === 'memo' ? t("calendar.memo_content") : t("calendar.details")}
-                                    </h3>
-                                    {logType === 'memo' ? (
-                                        <textarea
-                                            className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none min-h-[120px] resize-none"
-                                            placeholder={t("calendar.placeholder_memo")}
-                                            value={details}
-                                            onChange={e => setDetails(e.target.value)}
-                                        />
-                                    ) : (
-                                        <input
-                                            className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                                            placeholder={
-                                                logType === 'poop' ? t("calendar.placeholder_details_poop") :
-                                                    t("calendar.placeholder_details_cleaning")
-                                            }
-                                            value={details}
-                                            onChange={e => setDetails(e.target.value)}
-                                        />
-                                    )}
-                                </div>
-                            )}
+                            {
+                                logType !== 'feeding' && logType !== 'weight' && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">
+                                            {logType === 'memo' ? t("calendar.memo_content") : t("calendar.details")}
+                                        </h3>
+                                        {logType === 'memo' ? (
+                                            <textarea
+                                                className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none min-h-[120px] resize-none"
+                                                placeholder={t("calendar.placeholder_memo")}
+                                                value={details}
+                                                onChange={e => setDetails(e.target.value)}
+                                            />
+                                        ) : (
+                                            <input
+                                                className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                                                placeholder={
+                                                    logType === 'poop' ? t("calendar.placeholder_details_poop") :
+                                                        t("calendar.placeholder_details_cleaning")
+                                                }
+                                                value={details}
+                                                onChange={e => setDetails(e.target.value)}
+                                            />
+                                        )}
 
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.note")} (Optional)</h3>
-                                <textarea
-                                    className="w-full rounded-2xl bg-slate-500/5 border border-[var(--border)] p-4 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:outline-none resize-none min-h-[100px]"
-                                    placeholder={t("calendar.placeholder_note")}
-                                    value={note}
-                                    onChange={e => setNote(e.target.value)}
-                                />
-                            </div>
+                                    </div>
+                                )
+                            }
+
+
 
                             <Button
                                 onClick={handleSubmitLog}
@@ -569,11 +589,12 @@ export function CalendarView() {
                             >
                                 {t("common.save")}
                             </Button>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
+                        </div >
+                    </motion.div >
+                </div >
+            )
+            }
+        </AnimatePresence >
     );
 
     return (
@@ -715,10 +736,14 @@ export function CalendarView() {
                                                     "h-1 w-1 rounded-full",
                                                     isSelected ? "bg-white" : ""
                                                 )}
+
+
                                                 style={!isSelected ? { backgroundColor: `var(--color-${ev.type})` } : {}}
                                             />
                                         ))
                                     )}
+
+
                                 </div>
 
                                 {dayEvents.some(ev => ev.type === 'cleaning') && (
@@ -727,6 +752,8 @@ export function CalendarView() {
                                             "absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 rounded-full opacity-60",
                                             isSelected ? "bg-white" : ""
                                         )}
+
+
                                         style={!isSelected ? { backgroundColor: 'var(--color-cleaning)' } : {}}
                                     />
                                 )}
@@ -737,6 +764,8 @@ export function CalendarView() {
                                             "absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-1 rounded-full opacity-60",
                                             isSelected ? "bg-white" : ""
                                         )}
+
+
                                         style={!isSelected ? { backgroundColor: 'var(--color-memo)' } : {}}
                                     />
                                 )}
@@ -769,6 +798,7 @@ export function CalendarView() {
                                             🎂 {t("calendar.birthday_today")}
                                         </div>
                                     )}
+
                             </div>
 
                             <div className="space-y-3">
@@ -781,6 +811,7 @@ export function CalendarView() {
                                             <p className="text-xs font-bold text-pink-500/70">{t("calendar.birthday_today")}</p>
                                         </div>
                                     )}
+
 
                                 {(() => {
                                     if (!currentReptile?.careSchedules || !selectedDate) return null;
@@ -884,6 +915,8 @@ export function CalendarView() {
                                                             ? "bg-red-500/5 border-red-500/20 shadow-sm animate-pulse-subtle"
                                                             : "bg-[var(--background)] border-[var(--border)] shadow-sm"
                                                 )}
+
+
                                             >
                                                 <div className="flex items-center gap-4">
                                                     <div
@@ -891,6 +924,8 @@ export function CalendarView() {
                                                             "h-10 w-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm",
                                                             isRed ? "bg-red-500" : ""
                                                         )}
+
+
                                                         style={!isRed ? { backgroundColor: baseColor } : {}}
                                                     >
                                                         <Icon className="h-5 w-5" />
@@ -905,6 +940,8 @@ export function CalendarView() {
                                                                     {t("calendar.overdue_badge")}
                                                                 </span>
                                                             )}
+
+
                                                         </div>
                                                         <p className="text-[10px] text-[var(--muted)] font-bold">
                                                             {task.scheduleMode === 'weekly'
@@ -920,6 +957,7 @@ export function CalendarView() {
                                                         {t("calendar.task_done")}
                                                     </div>
                                                 )}
+
                                             </div>
                                         );
                                     };
@@ -936,6 +974,7 @@ export function CalendarView() {
                                                 </div>
                                             )}
 
+
                                             {scheduledTasks.length > 0 && (
                                                 <div className="space-y-3">
                                                     <h4 className="text-[10px] font-black text-[var(--muted)] uppercase tracking-[0.2em] px-2">
@@ -944,6 +983,7 @@ export function CalendarView() {
                                                     {scheduledTasks.map(renderTaskCard)}
                                                 </div>
                                             )}
+
                                         </div>
                                     );
                                 })()}
@@ -970,8 +1010,8 @@ export function CalendarView() {
                             </p>
                         </div>
                     )}
-                </AnimatePresence>
-            </div>
+                </AnimatePresence >
+            </div >
 
             <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -987,11 +1027,13 @@ export function CalendarView() {
             </motion.button>
 
             {renderModal()}
-            {showAuthDialog && (
-                <div className="fixed inset-0 z-[100]">
-                    <AuthDialog onClose={() => setShowAuthDialog(false)} />
-                </div>
-            )}
-        </div>
+            {
+                showAuthDialog && (
+                    <div className="fixed inset-0 z-[100]">
+                        <AuthDialog onClose={() => setShowAuthDialog(false)} />
+                    </div>
+                )
+            }
+        </div >
     );
 }

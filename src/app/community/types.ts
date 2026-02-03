@@ -5,6 +5,7 @@ export interface Post {
     image_urls: string[];
     created_at: string;
     likes_count: number;
+    comments_count?: number;
     user_id: string;
     profiles: {
         username: string | null;

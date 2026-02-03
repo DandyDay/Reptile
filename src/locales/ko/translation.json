@@ -76,7 +76,8 @@
         "scheduled_tasks": "예정된 관리",
         "overdue_tasks": "지연된 관리",
         "overdue_badge": "지연됨",
-        "task_done": "완료됨"
+        "task_done": "완료됨",
+        "future_log_warning": "미래 날짜에는 기록할 수 없습니다."
     },
     "dashboard": {
         "title": "대시보드",
@@ -166,5 +167,30 @@
         "login_required": "로그인이 필요합니다.",
         "comment_failed": "댓글 작성 실패",
         "share_success": "URL이 복사되었습니다."
+    },
+    "onboarding": {
+        "welcome_title": "만나서 반가워요! 👋",
+        "welcome_desc": "파충류 집사들을 위한 기록 도우미입니다.\n먼저 함께하는 반려 친구를 소개해 주세요!",
+        "step_reptile": "친구 등록하기",
+        "step_presets": "자주 먹는 먹이",
+        "add_first_reptile": "첫 번째 파충류 추가",
+        "reptile_name_placeholder": "예: 도마뱀이",
+        "reptile_species_placeholder": "예: 크레스티드 게코",
+        "select_presets_title": "기본 먹이 프리셋 선택",
+        "select_presets_desc": "자주 급여하는 먹이를 선택하면\n기록할 때 편하게 사용할 수 있어요.",
+        "start": "시작하기",
+        "next": "다음",
+        "finish": "완료하고 시작하기",
+        "presets": {
+            "cricket": "귀뚜라미",
+            "mealworm": "밀웜",
+            "dubia": "두비아로치",
+            "superworm": "슈퍼밀웜",
+            "mouse": "핑키/마우스",
+            "vegetable": "채소",
+            "fruit": "과일",
+            "calcium": "칼슘제",
+            "vitamin": "비타민"
+        }
     }
 }

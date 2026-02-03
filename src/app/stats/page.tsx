@@ -100,7 +100,7 @@ export default function StatsPage() {
                             const svgPoints = points.map(p => `${p.x},${p.y}`).join(" ");
 
                             return (
-                                <div className="h-full w-full relative">
+                                <div className="h-full w-full relative" onClick={() => setSelectedLogId(null)}>
                                     {/* Grid Lines */}
                                     <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-[var(--muted)] pointer-events-none">
                                         {[0, 0.5, 1].map((tick) => (
@@ -143,16 +143,18 @@ export default function StatsPage() {
                                             key={p.log.id}
                                             className="absolute w-3 h-3 -ml-1.5 -mt-1.5 rounded-full bg-[var(--background)] border-[2px] border-[var(--primary)] hover:scale-125 hover:bg-[var(--primary)] transition-all cursor-pointer z-10"
                                             style={{ left: `${p.x}%`, top: `${p.y}%` }}
-                                            onClick={() => setSelectedLogId(p.log.id === selectedLogId ? null : p.log.id)}
-                                            onMouseEnter={() => setSelectedLogId(p.log.id)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedLogId(p.log.id === selectedLogId ? null : p.log.id);
+                                            }}
                                         />
                                     ))}
 
-                                    {/* Floating Tooltip */}
                                     {selectedLogId && (() => {
                                         const p = points.find(pt => pt.log.id === selectedLogId);
                                         if (!p) return null;
                                         const isRightSide = p.x > 50;
+                                        const isTop = p.y < 20;
 
                                         return (
                                             <div
@@ -161,10 +163,10 @@ export default function StatsPage() {
                                                     left: isRightSide ? 'auto' : `${p.x}%`,
                                                     right: isRightSide ? `${100 - p.x}%` : 'auto',
                                                     top: `${p.y}%`,
-                                                    transform: 'translateY(-120%)'
+                                                    transform: isTop ? 'translateY(10px)' : 'translateY(-120%)'
                                                 }}
                                             >
-                                                <div className="bg-[var(--card)] backdrop-blur-md border border-[var(--border)] rounded-xl shadow-xl p-3 min-w-[120px] animate-in slide-in-from-bottom-2 fade-in zoom-in-95">
+                                                <div className={`bg-[var(--card)] backdrop-blur-md border border-[var(--border)] rounded-xl shadow-xl p-3 min-w-[120px] animate-in fade-in zoom-in-95 ${isTop ? 'slide-in-from-top-2' : 'slide-in-from-bottom-2'}`}>
                                                     <div className="text-lg font-black text-[var(--primary)] mb-0.5">
                                                         {p.log.weight}g
                                                     </div>

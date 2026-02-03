@@ -98,7 +98,7 @@ export function PostCard({
     const [isCommentsLoading, setIsCommentsLoading] = useState(false);
     const [newComment, setNewComment] = useState("");
     const [isSendingComment, setIsSendingComment] = useState(false);
-    const [commentCount, setCommentCount] = useState(0);
+    const [commentCount, setCommentCount] = useState(post.comments_count || 0);
     const [hasLoadedComments, setHasLoadedComments] = useState(false);
 
     const fetchComments = async () => {

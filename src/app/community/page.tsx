@@ -46,7 +46,9 @@ export default function CommunityPage() {
             .from('posts')
             .select(`
                 *,
-                profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url )
+                profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url ),
+                likes(count),
+                comments(count)
             `)
             .order('created_at', { ascending: false });
 
@@ -66,7 +68,8 @@ export default function CommunityPage() {
             const postsWithLikes: Post[] = data.map((post: any) => ({
                 ...post,
                 image_urls: Array.isArray(post.image_urls) ? post.image_urls : [],
-                likes_count: post.likes_count || 0,
+                likes_count: post.likes && post.likes[0] ? post.likes[0].count : 0,
+                comments_count: post.comments && post.comments[0] ? post.comments[0].count : 0,
                 isLiked: likedPostIds.includes(post.id)
             }));
             setPosts(postsWithLikes);
@@ -316,7 +319,7 @@ export default function CommunityPage() {
 
             {/* Header */}
             <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-[var(--background)]/80 border-b border-[var(--border)]">
-                <div className="px-4 h-14 flex items-center justify-between">
+                <div className="mx-auto max-w-xl px-4 h-14 flex items-center justify-between">
                     <h1 className="text-lg font-black tracking-tight">{t("nav.community")}</h1>
 
                     <div className="flex items-center gap-2">
@@ -335,7 +338,7 @@ export default function CommunityPage() {
             </header>
 
             {/* Content */}
-            <main className="p-4 space-y-4">
+            <main className="mx-auto max-w-xl p-4 space-y-4">
                 {/* Create Post Card */}
                 <div className="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] space-y-3">
                     <div className="flex gap-3">

@@ -76,7 +76,8 @@
         "scheduled_tasks": "Scheduled Care",
         "overdue_tasks": "Overdue Care",
         "overdue_badge": "Overdue",
-        "task_done": "Done"
+        "task_done": "Done",
+        "future_log_warning": "Cannot log care tasks for future dates."
     },
     "dashboard": {
         "title": "Dashboard",
@@ -166,5 +167,30 @@
         "login_required": "Login required.",
         "comment_failed": "Failed to post comment",
         "share_success": "URL copied to clipboard."
+    },
+    "onboarding": {
+        "welcome_title": "Welcome! 👋",
+        "welcome_desc": "Your companion for tracking reptile care.\nFirst, introduce us to your reptile friend!",
+        "step_reptile": "Add Companion",
+        "step_presets": "Food Presets",
+        "add_first_reptile": "Add First Reptile",
+        "reptile_name_placeholder": "e.g. Pascal",
+        "reptile_species_placeholder": "e.g. Crested Gecko",
+        "select_presets_title": "Select Food Presets",
+        "select_presets_desc": "Select foods you use often\nto make logging easier.",
+        "start": "Get Started",
+        "next": "Next",
+        "finish": "Finish & Start",
+        "presets": {
+            "cricket": "Crickets",
+            "mealworm": "Mealworms",
+            "dubia": "Dubia Roaches",
+            "superworm": "Superworms",
+            "mouse": "Pinky/Mice",
+            "vegetable": "Vegetables",
+            "fruit": "Fruits",
+            "calcium": "Calcium",
+            "vitamin": "Vitamins"
+        }
     }
 }
