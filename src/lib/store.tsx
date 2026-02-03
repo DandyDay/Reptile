@@ -298,6 +298,18 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                         avatar: profileData.avatar_url || "👤",
                         bio: profileData.bio || ""
                     });
+
+                    // Load custom theme from server if enabled
+                    if ((profileData as any).use_custom_theme && (profileData as any).custom_theme) {
+                        setVisualSettings(prev => ({
+                            ...prev,
+                            theme: "custom",
+                            customColors: {
+                                ...prev.customColors,
+                                ...(profileData as any).custom_theme
+                            }
+                        }));
+                    }
                 }
 
                 // Migrate local data if exists and not already migrated
@@ -715,6 +727,33 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    // System theme detection - follow device preference for dark/light mode
+    useEffect(() => {
+        // Only apply system theme if not using custom theme
+        if (visualSettings.theme === 'custom') return;
+
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        const handleThemeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+            const systemTheme = e.matches ? 'dark' : 'light';
+            setVisualSettings(prev => {
+                // Don't override if user has custom theme
+                if (prev.theme === 'custom') return prev;
+                return { ...prev, theme: systemTheme };
+            });
+        };
+
+        // Set initial theme based on system preference
+        handleThemeChange(mediaQuery);
+
+        // Listen for changes
+        mediaQuery.addEventListener('change', handleThemeChange);
+
+        return () => {
+            mediaQuery.removeEventListener('change', handleThemeChange);
+        };
+    }, [visualSettings.theme]);
+
     const setCalViewMode = (mode: "dot" | "emoji") => {
         const newSettings = { ...visualSettings, calViewMode: mode };
         setVisualSettings(newSettings);
@@ -731,6 +770,16 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         const newSettings = { ...visualSettings, theme };
         setVisualSettings(newSettings);
         localStorage.setItem("reptile-visual-settings-v1", JSON.stringify(newSettings));
+
+        // Update server if logged in
+        if (session?.user) {
+            // If switching away from custom theme, disable it on server
+            if (theme !== 'custom') {
+                supabase.from('profiles').update({
+                    use_custom_theme: false
+                } as any).eq('id', session.user.id).then();
+            }
+        }
     };
 
     const setCustomColor = (key: string, color: string) => {
@@ -744,6 +793,15 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 }
             };
             localStorage.setItem("reptile-visual-settings-v1", JSON.stringify(newSettings));
+
+            // Save to server if logged in
+            if (session?.user) {
+                supabase.from('profiles').update({
+                    use_custom_theme: true,
+                    custom_theme: newSettings.customColors
+                } as any).eq('id', session.user.id).then();
+            }
+
             return newSettings;
         });
     };
@@ -759,6 +817,15 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 }
             };
             localStorage.setItem("reptile-visual-settings-v1", JSON.stringify(newSettings));
+
+            // Save to server if logged in
+            if (session?.user) {
+                supabase.from('profiles').update({
+                    use_custom_theme: true,
+                    custom_theme: newSettings.customColors
+                } as any).eq('id', session.user.id).then();
+            }
+
             return newSettings;
         });
     };
