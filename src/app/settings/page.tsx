@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
     ArrowLeft, Trash2, Upload, Download, X, Settings2,
-    Palette, ChevronRight, Database, UserPlus, Users, Languages, LogOut, User, Loader2, Camera
+    Palette, ChevronRight, Database, UserPlus, Users, Languages, LogOut, User, Loader2, Camera, Store
 } from "lucide-react";
+import { ThemeStore } from "@/components/theme-store";
+import { ThemePublishDialog } from "@/components/theme-publish-dialog";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -18,7 +20,7 @@ import { ImageCropper } from "@/components/image-cropper";
 import { AuthDialog } from "@/components/auth-dialog";
 import { supabase } from "@/lib/supabase";
 
-type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data" | "profile";
+type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data" | "profile" | "theme_store";
 
 function SettingsContent() {
     const {
@@ -45,6 +47,8 @@ function SettingsContent() {
     const [rawImage, setRawImage] = useState<string | null>(null);
     const [isCropping, setIsCropping] = useState(false);
     const [showAuthDialog, setShowAuthDialog] = useState(false);
+    const [showThemePublishDialog, setShowThemePublishDialog] = useState(false);
+    const [showCustomColors, setShowCustomColors] = useState(false);
 
     // Profile edit state
     const [myProfile, setMyProfile] = useState<any>(null);
@@ -249,7 +253,32 @@ function SettingsContent() {
         }
 
         resetForm();
+        resetForm();
         setView("reptiles");
+    };
+
+    const handlePublishTheme = () => {
+        if (!session?.user) {
+            setShowAuthDialog(true);
+            return;
+        }
+        setShowThemePublishDialog(true);
+    };
+
+    const performThemePublish = async (name: string) => {
+        if (!session?.user) return;
+
+        const { error } = await supabase
+            .from('themes')
+            .insert({
+                user_id: session.user.id,
+                name,
+                colors: visualSettings.customColors,
+                likes_count: 0
+            });
+
+        if (error) throw error;
+        alert(t("settings.theme_published"));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -277,9 +306,10 @@ function SettingsContent() {
                     view === "edit_reptile" ? t("settings.edit_profile") :
                         view === "appearance" ? t("settings.sections.appearance") :
                             view === "profile" ? "프로필 편집" :
-                                t("settings.sections.data");
+                                view === "theme_store" ? t("settings.theme_store") :
+                                    t("settings.sections.data");
 
-        const backTarget = view === "main" ? "/" : () => setView(view === "add_reptile" || view === "edit_reptile" ? "reptiles" : "main");
+        const backTarget = view === "main" ? "/" : () => setView(view === "theme_store" ? "appearance" : (view === "add_reptile" || view === "edit_reptile" ? "reptiles" : "main"));
 
         return (
             <div className="flex items-center gap-4 mb-8">
@@ -777,6 +807,7 @@ function SettingsContent() {
     const renderAppearanceView = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <Card className="p-4 border-[var(--border)] divide-y divide-[var(--border)]">
+                {/* Theme Selector */}
                 <div className="pb-6">
                     <div className="flex items-center gap-3 mb-4">
                         <Palette className="h-5 w-5 text-pink-400" />
@@ -797,38 +828,46 @@ function SettingsContent() {
                             </button>
                         ))}
                     </div>
+                </div>
 
-                    {visualSettings?.theme === 'custom' && (
-                        <div className="space-y-6 mt-6 pt-6 border-t border-[var(--border)] animate-in fade-in slide-in-from-top-4 duration-300">
-                            <div className="flex gap-2">
-                                <Button variant="secondary" size="sm" onClick={exportTheme} className="flex-1 gap-2">
-                                    <Download className="h-4 w-4" />
-                                    {t("settings.export_theme")}
-                                </Button>
-                                <Button variant="secondary" size="sm" onClick={() => document.getElementById('theme-import')?.click()} className="flex-1 gap-2">
-                                    <Upload className="h-4 w-4" />
-                                    {t("settings.import_theme")}
-                                </Button>
-                                <input
-                                    id="theme-import"
-                                    type="file"
-                                    accept=".json"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                            const reader = new FileReader();
-                                            reader.onload = (ev) => {
-                                                const content = ev.target?.result as string;
-                                                importTheme(content);
-                                            };
-                                            reader.readAsText(file);
-                                        }
-                                    }}
-                                />
+                {/* Theme Store Link */}
+                <div className="py-6">
+                    <button
+                        onClick={() => setView("theme_store")}
+                        className="w-full p-4 rounded-xl bg-gradient-to-r from-pink-500/10 to-violet-500/10 border border-[var(--border)] flex items-center justify-between group hover:border-pink-500/30 transition-all"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-gradient-to-br from-pink-500 to-violet-500 text-white">
+                                <Store className="h-5 w-5" />
                             </div>
+                            <div className="text-left">
+                                <h3 className="font-bold text-[var(--foreground)]">{t("settings.theme_store")}</h3>
+                                <p className="text-xs text-[var(--muted)]">Find and share custom themes</p>
+                            </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-[var(--muted)] group-hover:text-[var(--foreground)] transition-colors" />
+                    </button>
+                </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                {/* Custom Theme Editor */}
+                {visualSettings?.theme === 'custom' && (
+                    <div className="py-6 space-y-6">
+
+
+                        <div className="flex gap-2">
+                            <Button variant="secondary" size="sm" onClick={handlePublishTheme} className="flex-1 gap-2">
+                                <Store className="h-4 w-4" />
+                                {t("settings.publish_theme")}
+                            </Button>
+                            <Button variant="secondary" size="sm" onClick={() => setShowCustomColors(!showCustomColors)} className="flex-1 gap-2 border border-[var(--border)]">
+                                <Palette className="h-4 w-4" />
+                                {showCustomColors ? t("settings.hide_colors") : t("settings.edit_colors")}
+                                <ChevronRight className={cn("h-4 w-4 transition-transform", showCustomColors && "rotate-90")} />
+                            </Button>
+                        </div>
+
+                        {showCustomColors && (
+                            <div className="grid grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-200">
                                 {Object.entries(visualSettings.customColors).map(([key, value]) => (
                                     <div key={key} className="space-y-1.5 p-2 rounded-lg bg-slate-500/5 border border-[var(--border)] transition-colors hover:border-[var(--primary)]/30">
                                         <label className="text-[10px] text-[var(--muted)] font-bold uppercase tracking-wider block truncate">{t(`settings.colors.${key}` as any)}</label>
@@ -846,10 +885,11 @@ function SettingsContent() {
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
 
+                {/* Language Selector */}
                 <div className="py-6">
                     <div className="flex items-center gap-3 mb-4">
                         <Languages className="h-5 w-5 text-blue-400" />
@@ -863,7 +903,7 @@ function SettingsContent() {
                                 visualSettings?.language === 'ko' ? "bg-[var(--primary)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"
                             )}
                         >
-                            {t("settings.lang_ko")}
+                            한국어
                         </button>
                         <button
                             onClick={() => setLanguage('en')}
@@ -877,6 +917,7 @@ function SettingsContent() {
                     </div>
                 </div>
 
+                {/* Calendar View Mode */}
                 <div className="pt-6">
                     <div className="flex items-center gap-3 mb-4">
                         <Settings2 className="h-5 w-5 text-amber-400" />
@@ -1006,25 +1047,16 @@ function SettingsContent() {
                                     <label className="text-xs font-medium text-[var(--muted)]">이메일</label>
                                     <input
                                         className="w-full rounded-xl bg-slate-500/5 border border-[var(--border)] p-3 text-[var(--muted)] cursor-not-allowed"
-                                        value={session.user.email || ""}
+                                        value={session.user.email}
                                         disabled
                                     />
                                 </div>
                             )}
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-3 pt-4">
+                        <div className="flex justify-end pt-4">
                             <Button
-                                type="button"
-                                variant="secondary"
-                                className="flex-1"
-                                onClick={() => setView("main")}
-                            >
-                                취소
-                            </Button>
-                            <Button
-                                className="flex-1"
+                                className="w-full"
                                 onClick={handleSaveProfile}
                                 disabled={isSavingProfile}
                             >
@@ -1057,6 +1089,11 @@ function SettingsContent() {
                     {view === "appearance" && renderAppearanceView()}
                     {view === "data" && renderDataView()}
                     {view === "profile" && renderProfileView()}
+                    {view === "theme_store" && (
+                        <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                            <ThemeStore />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -1065,6 +1102,12 @@ function SettingsContent() {
                     <div className="fixed inset-0 z-[100]">
                         <AuthDialog onClose={() => setShowAuthDialog(false)} />
                     </div>
+                )}
+                {showThemePublishDialog && (
+                    <ThemePublishDialog
+                        onClose={() => setShowThemePublishDialog(false)}
+                        onPublish={performThemePublish}
+                    />
                 )}
                 {isCropping && rawImage && (
                     <ImageCropper

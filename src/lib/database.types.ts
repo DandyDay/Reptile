@@ -285,12 +285,91 @@ export type Database = {
                     },
                 ]
             }
+            themes: {
+                Row: {
+                    id: string
+                    user_id: string
+                    name: string
+                    colors: Json
+                    created_at: string
+                    likes_count: number
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    name: string
+                    colors: Json
+                    created_at?: string
+                    likes_count?: number
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    name?: string
+                    colors?: Json
+                    created_at?: string
+                    likes_count?: number
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "themes_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
+            theme_likes: {
+                Row: {
+                    user_id: string
+                    theme_id: string
+                    created_at: string
+                }
+                Insert: {
+                    user_id: string
+                    theme_id: string
+                    created_at?: string
+                }
+                Update: {
+                    user_id?: string
+                    theme_id?: string
+                    created_at?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "theme_likes_theme_id_fkey"
+                        columns: ["theme_id"]
+                        isOneToOne: false
+                        referencedRelation: "themes"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "theme_likes_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
         }
         Views: {
             [_ in never]: never
         }
         Functions: {
-            [_ in never]: never
+            increment_theme_likes: {
+                Args: {
+                    theme_id: string
+                }
+                Returns: void
+            }
+            decrement_theme_likes: {
+                Args: {
+                    theme_id: string
+                }
+                Returns: void
+            }
         }
         Enums: {
             [_ in never]: never
