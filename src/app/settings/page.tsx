@@ -20,6 +20,7 @@ import { ImageCropper } from "@/components/image-cropper";
 import { AuthDialog } from "@/components/auth-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { supabase } from "@/lib/supabase";
+import { Toast } from "@/components/toast";
 
 type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data" | "profile" | "theme_store";
 
@@ -63,6 +64,10 @@ function SettingsContent() {
     const profileFileInputRef = useRef<HTMLInputElement>(null);
     const [profileRawImage, setProfileRawImage] = useState<string | null>(null);
     const [isProfileCropping, setIsProfileCropping] = useState(false);
+    const [toastState, setToastState] = useState<{ isOpen: boolean; message: string }>({
+        isOpen: false,
+        message: ""
+    });
 
     // Care Schedule state
     const [feedingEnabled, setFeedingEnabled] = useState(false);
@@ -281,7 +286,10 @@ function SettingsContent() {
             });
 
         if (error) throw error;
-        alert(t("settings.theme_published"));
+        setToastState({
+            isOpen: true,
+            message: t("settings.theme_published")
+        });
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1075,19 +1083,21 @@ function SettingsContent() {
             </div>
 
             <AnimatePresence>
-                {showAuthDialog && (
-                    <div className="fixed inset-0 z-[100]">
+                {!!showAuthDialog && (
+                    <div key="auth-dialog" className="fixed inset-0 z-[100]">
                         <AuthDialog onClose={() => setShowAuthDialog(false)} />
                     </div>
                 )}
-                {showThemePublishDialog && (
+                {!!showThemePublishDialog && (
                     <ThemePublishDialog
+                        key="theme-publish-dialog"
                         onClose={() => setShowThemePublishDialog(false)}
                         onPublish={performThemePublish}
                     />
                 )}
-                {isCropping && rawImage && (
+                {(isCropping && !!rawImage) && (
                     <ImageCropper
+                        key="reptile-image-cropper"
                         image={rawImage}
                         onCrop={(cropped) => {
                             setAvatar(cropped);
@@ -1101,8 +1111,9 @@ function SettingsContent() {
                         }}
                     />
                 )}
-                {isProfileCropping && profileRawImage && (
+                {(isProfileCropping && !!profileRawImage) && (
                     <ImageCropper
+                        key="profile-image-cropper"
                         image={profileRawImage}
                         onCrop={(cropped) => {
                             setProfileAvatar(cropped);
@@ -1117,6 +1128,7 @@ function SettingsContent() {
                 )}
 
                 <ConfirmDialog
+                    key="delete-confirm-dialog"
                     isOpen={showConfirmDelete}
                     onClose={() => {
                         setShowConfirmDelete(false);
@@ -1132,6 +1144,12 @@ function SettingsContent() {
                     }}
                     title={t("settings.delete_confirm").replace('{{name}}', deleteTarget?.name || "")}
                     variant="danger"
+                />
+
+                <Toast
+                    message={toastState.message}
+                    isVisible={toastState.isOpen}
+                    onClose={() => setToastState(prev => ({ ...prev, isOpen: false }))}
                 />
             </AnimatePresence>
         </main>

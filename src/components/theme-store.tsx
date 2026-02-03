@@ -27,7 +27,7 @@ interface Theme {
 
 export function ThemeStore() {
     const { t } = useTranslation();
-    const { visualSettings, setCustomColor, session } = useReptileLogs();
+    const { visualSettings, setCustomColors, session } = useReptileLogs();
     const [themes, setThemes] = useState<Theme[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"latest" | "popular">("popular");
@@ -89,10 +89,8 @@ export function ThemeStore() {
     }, [sortBy, session]);
 
     const handleApplyTheme = (theme: Theme) => {
-        // Apply all colors from the theme
-        Object.entries(theme.colors).forEach(([key, value]) => {
-            setCustomColor(key, value as string);
-        });
+        // Apply all colors from the theme at once
+        setCustomColors(theme.colors);
 
         setToastState({
             isOpen: true,
@@ -123,10 +121,9 @@ export function ThemeStore() {
 
             if (error) throw error;
 
-            setAlertState({
+            setToastState({
                 isOpen: true,
-                title: t("settings.theme_published"),
-                type: "success"
+                message: t("settings.theme_published")
             });
             fetchThemes();
         } catch (error) {
@@ -215,7 +212,10 @@ export function ThemeStore() {
             fetchThemes();
         } catch (error) {
             console.error("Rename error:", error);
-            alert("Failed to rename theme");
+            setToastState({
+                isOpen: true,
+                message: "Failed to rename theme"
+            });
         }
     };
 

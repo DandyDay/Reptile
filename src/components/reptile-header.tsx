@@ -27,7 +27,7 @@ export function ReptileHeader() {
                         <div className={cn(
                             "relative flex h-16 w-16 items-center justify-center rounded-full border-2 transition-all overflow-hidden bg-[var(--card)]",
                             isSelected
-                                ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-110"
+                                ? "border-[var(--primary)] shadow-[0_0_15px_var(--primary-half)] scale-110"
                                 : "border-[var(--border)] opacity-70 hover:opacity-100 hover:scale-105"
                         )}>
                             {isImage ? (
@@ -38,7 +38,7 @@ export function ReptileHeader() {
                         </div>
                         <span className={cn(
                             "text-xs font-medium truncate w-full text-center transition-colors",
-                            isSelected ? "text-emerald-400" : "text-[var(--muted)]"
+                            isSelected ? "text-[var(--primary)]" : "text-[var(--muted)]"
                         )}>
                             {reptile.name}
                         </span>

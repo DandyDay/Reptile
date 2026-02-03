@@ -88,6 +88,7 @@ interface ReptileContextType {
     setLanguage: (lang: "ko" | "en") => void;
     setTheme: (theme: "dark" | "light" | "custom") => void;
     setCustomColor: (key: string, color: string) => void;
+    setCustomColors: (colors: Record<string, string>) => void;
     exportTheme: () => void;
     importTheme: (json: string) => void;
     foodPresets: FoodPreset[];
@@ -166,21 +167,21 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         language: "ko" as "ko" | "en",
         theme: "dark" as "dark" | "light" | "custom",
         customColors: {
-            background: "#fff1f4",
-            card: "#ffffff",
-            primary: "#ff5c8d",
-            secondary: "#ffdee6",
+            background: "#2d0a1a",
+            card: "#3d1222",
+            primary: "#ff4d94",
+            secondary: "#4d182e",
             accent: "#ff8da1",
-            text: "#5c1d33",
-            border: "#ffdae3",
-            muted: "#a88090",
-            feeding: "#ff5c8d",
-            poop: "#8c6e7a",
+            text: "#fff0f5",
+            border: "#5d1f36",
+            muted: "#a67d8a",
+            feeding: "#ff4d94",
+            poop: "#a64d79",
             cleaning: "#ff85b3",
-            memo: "#ffcc66",
-            success: "#ff5c8d",
+            memo: "#e06666",
+            success: "#ff4d94",
             danger: "#ff0055",
-            weight: "#ff70a1"
+            weight: "#f06292"
         }
     });
 
@@ -733,16 +734,33 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
     };
 
     const setCustomColor = (key: string, color: string) => {
-        const newSettings = {
-            ...visualSettings,
-            theme: "custom" as const,
-            customColors: {
-                ...visualSettings.customColors,
-                [key]: color
-            }
-        };
-        setVisualSettings(newSettings);
-        localStorage.setItem("reptile-visual-settings-v1", JSON.stringify(newSettings));
+        setVisualSettings(prev => {
+            const newSettings = {
+                ...prev,
+                theme: "custom" as const,
+                customColors: {
+                    ...prev.customColors,
+                    [key]: color
+                }
+            };
+            localStorage.setItem("reptile-visual-settings-v1", JSON.stringify(newSettings));
+            return newSettings;
+        });
+    };
+
+    const setCustomColors = (colors: Record<string, string>) => {
+        setVisualSettings(prev => {
+            const newSettings = {
+                ...prev,
+                theme: "custom" as const,
+                customColors: {
+                    ...prev.customColors,
+                    ...colors
+                }
+            };
+            localStorage.setItem("reptile-visual-settings-v1", JSON.stringify(newSettings));
+            return newSettings;
+        });
     };
 
     const exportTheme = () => {
@@ -823,6 +841,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         root.style.setProperty('--background', colors.background);
         root.style.setProperty('--card', colors.card);
         root.style.setProperty('--primary', colors.primary);
+        root.style.setProperty('--primary-half', colors.primary + '80');
         root.style.setProperty('--secondary', colors.secondary);
         root.style.setProperty('--accent', colors.accent);
         root.style.setProperty('--foreground', colors.text);
@@ -871,6 +890,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         setLanguage,
         setTheme,
         setCustomColor,
+        setCustomColors,
         exportTheme,
         importTheme,
         foodPresets,

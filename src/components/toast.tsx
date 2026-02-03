@@ -26,6 +26,7 @@ export function Toast({ message, isVisible, onClose, duration = 3000 }: ToastPro
             {isVisible && (
                 <div className="fixed bottom-6 left-0 right-0 z-[100] flex justify-center pointer-events-none">
                     <motion.div
+                        key="toast-content"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
