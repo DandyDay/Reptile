@@ -616,6 +616,15 @@ export default function CommunityPage() {
                             {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.post")}
                         </button>
                     </div>
+
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        multiple
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageSelect}
+                    />
                 </div>
 
                 {/* Feed */}
