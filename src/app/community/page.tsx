@@ -94,10 +94,16 @@ export default function CommunityPage() {
     useEffect(() => {
         fetchPosts();
 
-        // Subscribe to post changes
+        // Subscribe to post, like, and comment changes
         const channel = supabase
-            .channel('posts-channel')
+            .channel('community-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+                fetchPosts();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => {
+                fetchPosts();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => {
                 fetchPosts();
             })
             .subscribe();
@@ -436,7 +442,7 @@ export default function CommunityPage() {
                 description="이 게시물을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
                 confirmText={t("common.delete")}
                 cancelText={t("common.cancel")}
-                isDestructive
+                variant="danger"
             />
         </div>
     );

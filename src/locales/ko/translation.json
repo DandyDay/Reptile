@@ -5,6 +5,8 @@
         "save": "저장",
         "delete": "삭제",
         "confirm": "확인",
+        "edit": "메모 수정",
+        "save_success": "저장되었습니다!",
         "emoji": "이모지",
         "photo": "사진",
         "no_record": "기록 없음"
@@ -149,6 +151,7 @@
         "theme_deleted": "테마가 삭제되었습니다.",
         "theme_delete_confirm": "이 테마를 삭제하시겠습니까?",
         "theme_publish_failed": "공유에 실패했습니다.",
+        "theme_rename": "테마 이름 바꾸기",
         "theme_name_prompt": "테마 이름을 입력하세요:",
         "theme_name_placeholder": "나만의 멋진 테마",
         "edit_colors": "색상 편집",
@@ -184,6 +187,8 @@
     "onboarding": {
         "welcome_title": "만나서 반가워요! 👋",
         "welcome_desc": "파충류 집사들을 위한 기록 도우미입니다.\n먼저 함께하는 반려 친구를 소개해 주세요!",
+        "already_have_account": "이미 계정이 있으신가요?",
+        "login": "로그인하기",
         "step_reptile": "친구 등록하기",
         "step_presets": "자주 먹는 먹이",
         "add_first_reptile": "첫 번째 파충류 추가",

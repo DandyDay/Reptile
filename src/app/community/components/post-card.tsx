@@ -11,6 +11,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { Post, Comment } from "../types";
+import { AuthDialog } from "@/components/auth-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface PostCardProps {
     post: Post;
@@ -100,6 +102,14 @@ export function PostCard({
     const [isSendingComment, setIsSendingComment] = useState(false);
     const [commentCount, setCommentCount] = useState(post.comments_count || 0);
     const [hasLoadedComments, setHasLoadedComments] = useState(false);
+    const [showAuthDialog, setShowAuthDialog] = useState(false);
+
+    // Sync with props when they change (due to realtime updates in parent)
+    React.useEffect(() => {
+        if (post.comments_count !== undefined) {
+            setCommentCount(post.comments_count);
+        }
+    }, [post.comments_count]);
 
     const fetchComments = async () => {
         setIsCommentsLoading(true);
@@ -133,7 +143,7 @@ export function PostCard({
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session) {
-            alert(t("community.login_required"));
+            setShowAuthDialog(true);
             return;
         }
 
@@ -394,6 +404,12 @@ export function PostCard({
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {showAuthDialog && (
+                <div className="fixed inset-0 z-[110]">
+                    <AuthDialog onClose={() => setShowAuthDialog(false)} />
+                </div>
+            )}
         </div>
     );
 }

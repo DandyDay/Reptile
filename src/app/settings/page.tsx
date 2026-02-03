@@ -18,6 +18,7 @@ import { FeedingPresetManager } from "@/components/feeding-preset-manager";
 import { motion, AnimatePresence } from "framer-motion";
 import { ImageCropper } from "@/components/image-cropper";
 import { AuthDialog } from "@/components/auth-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { supabase } from "@/lib/supabase";
 
 type SettingsView = "main" | "reptiles" | "add_reptile" | "edit_reptile" | "appearance" | "data" | "profile" | "theme_store";
@@ -26,7 +27,7 @@ function SettingsContent() {
     const {
         reptiles, addReptile, updateReptile, deleteReptile, visualSettings,
         setCalViewMode, setLanguage, setTheme, setCustomColor,
-        exportTheme, importTheme, session
+        session
     } = useReptileLogs();
 
     const router = useRouter();
@@ -48,6 +49,8 @@ function SettingsContent() {
     const [isCropping, setIsCropping] = useState(false);
     const [showAuthDialog, setShowAuthDialog] = useState(false);
     const [showThemePublishDialog, setShowThemePublishDialog] = useState(false);
+    const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string } | null>(null);
     const [showCustomColors, setShowCustomColors] = useState(false);
 
     // Profile edit state
@@ -406,7 +409,7 @@ function SettingsContent() {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-[var(--foreground)]">{t("settings.sections.data")}</h3>
-                                <p className="text-xs text-[var(--muted)]">{t("calendar.manage_presets")}, {t("settings.export_theme")}</p>
+                                <p className="text-xs text-[var(--muted)]">{t("calendar.manage_presets")}</p>
                             </div>
                         </div>
                         <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
@@ -478,9 +481,8 @@ function SettingsContent() {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if (confirm(t("settings.delete_confirm").replace('{{name}}', r.name))) {
-                                            deleteReptile(r.id);
-                                        }
+                                        setDeleteTarget({ id: r.id, name: r.name });
+                                        setShowConfirmDelete(true);
                                     }}
                                     className="p-2.5 text-red-400/50 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all md:opacity-0 md:group-hover:opacity-100"
                                     title={t("common.delete")}
@@ -788,9 +790,9 @@ function SettingsContent() {
                                 variant="ghost"
                                 className="w-full text-red-500 hover:bg-red-500/10 h-10 mt-2 text-xs"
                                 onClick={() => {
-                                    if (editingReptileId && confirm(t("settings.delete_confirm").replace('{{name}}', name))) {
-                                        deleteReptile(editingReptileId);
-                                        setView("reptiles");
+                                    if (editingReptileId) {
+                                        setDeleteTarget({ id: editingReptileId, name: name });
+                                        setShowConfirmDelete(true);
                                     }
                                 }}
                             >
@@ -807,31 +809,31 @@ function SettingsContent() {
     const renderAppearanceView = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <Card className="p-4 border-[var(--border)] divide-y divide-[var(--border)]">
-                {/* Theme Selector */}
-                <div className="pb-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <Palette className="h-5 w-5 text-pink-400" />
-                        <h3 className="font-semibold text-[var(--foreground)]">{t("settings.theme")}</h3>
+                <div className="space-y-2 pb-6">
+                    {/* Theme Selector */}
+                    <div>
+                        <div className="flex items-center gap-3 mb-4">
+                            <Palette className="h-5 w-5 text-pink-400" />
+                            <h3 className="font-semibold text-[var(--foreground)]">{t("settings.theme")}</h3>
+                        </div>
+
+                        <div className="flex gap-1 bg-slate-500/10 p-1 rounded-lg border border-[var(--border)]">
+                            {(['dark', 'light', 'custom'] as const).map((tId) => (
+                                <button
+                                    key={tId}
+                                    onClick={() => setTheme(tId)}
+                                    className={cn(
+                                        "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                                        visualSettings?.theme === tId ? "bg-[var(--primary)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                                    )}
+                                >
+                                    {t(`settings.${tId}` as any)}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="flex gap-1 bg-slate-500/10 p-1 rounded-lg border border-[var(--border)]">
-                        {(['dark', 'light', 'custom'] as const).map((tId) => (
-                            <button
-                                key={tId}
-                                onClick={() => setTheme(tId)}
-                                className={cn(
-                                    "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                                    visualSettings?.theme === tId ? "bg-[var(--primary)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"
-                                )}
-                            >
-                                {t(`settings.${tId}` as any)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Theme Store Link */}
-                <div className="py-6">
+                    {/* Theme Store Link */}
                     <button
                         onClick={() => setView("theme_store")}
                         className="w-full p-4 rounded-xl bg-gradient-to-r from-pink-500/10 to-violet-500/10 border border-[var(--border)] flex items-center justify-between group hover:border-pink-500/30 transition-all"
@@ -952,31 +954,6 @@ function SettingsContent() {
     const renderDataView = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <FeedingPresetManager />
-
-            <Card className="p-4 border-[var(--border)]">
-                <div className="flex items-center gap-3 mb-4">
-                    <Database className="h-5 w-5 text-blue-400" />
-                    <h3 className="font-semibold text-[var(--foreground)]">{t("settings.sections.data")}</h3>
-                </div>
-                <div className="space-y-3">
-                    <Button variant="secondary" className="w-full justify-start gap-3 h-12" onClick={exportTheme}>
-                        <Download className="h-4 w-4" />
-                        {t("settings.export_theme")}
-                    </Button>
-                    <Button variant="secondary" className="w-full justify-start gap-3 h-12" onClick={() => document.getElementById('theme-import-data')?.click()}>
-                        <Upload className="h-4 w-4" />
-                        {t("settings.import_theme")}
-                    </Button>
-                    <input id="theme-import-data" type="file" accept=".json" className="hidden" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (ev) => importTheme(ev.target?.result as string);
-                            reader.readAsText(file);
-                        }
-                    }} />
-                </div>
-            </Card>
         </div>
     );
 
@@ -1138,6 +1115,24 @@ function SettingsContent() {
                         }}
                     />
                 )}
+
+                <ConfirmDialog
+                    isOpen={showConfirmDelete}
+                    onClose={() => {
+                        setShowConfirmDelete(false);
+                        setDeleteTarget(null);
+                    }}
+                    onConfirm={() => {
+                        if (deleteTarget) {
+                            deleteReptile(deleteTarget.id);
+                            if (view === "edit_reptile") setView("reptiles");
+                            setShowConfirmDelete(false);
+                            setDeleteTarget(null);
+                        }
+                    }}
+                    title={t("settings.delete_confirm").replace('{{name}}', deleteTarget?.name || "")}
+                    variant="danger"
+                />
             </AnimatePresence>
         </main>
     );

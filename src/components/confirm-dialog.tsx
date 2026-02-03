@@ -1,18 +1,21 @@
 "use client";
 
-import React from "react";
-import { X, AlertTriangle } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { AlertTriangle, X } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 interface ConfirmDialogProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
     title: string;
-    description: string;
+    description?: string;
     confirmText?: string;
     cancelText?: string;
-    isDestructive?: boolean;
+    variant?: "danger" | "primary";
 }
 
 export function ConfirmDialog({
@@ -21,60 +24,78 @@ export function ConfirmDialog({
     onConfirm,
     title,
     description,
-    confirmText = "Confirm",
-    cancelText = "Cancel",
-    isDestructive = false
+    confirmText,
+    cancelText,
+    variant = "primary"
 }: ConfirmDialogProps) {
+    const { t } = useTranslation();
+
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        if (isOpen) {
+            window.addEventListener("keydown", handleEscape);
+            document.body.style.overflow = "hidden";
+        }
+        return () => {
+            window.removeEventListener("keydown", handleEscape);
+            document.body.style.overflow = "unset";
+        };
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (
-        <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <Card className="relative w-full max-w-xs overflow-hidden border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                <button
                     onClick={onClose}
-                />
-
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="relative w-full max-w-sm bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xl overflow-hidden"
+                    className="absolute right-4 top-4 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
                 >
-                    <div className="p-6 text-center space-y-4">
-                        <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center ${isDestructive ? 'bg-red-500/10 text-red-500' : 'bg-[var(--primary)]/10 text-[var(--primary)]'}`}>
-                            <AlertTriangle className="h-6 w-6" />
-                        </div>
+                    <X size={20} />
+                </button>
 
-                        <div className="space-y-1">
-                            <h3 className="text-lg font-bold text-[var(--foreground)]">{title}</h3>
-                            <p className="text-sm text-[var(--muted)]">{description}</p>
-                        </div>
+                <div className="flex flex-col items-center text-center">
+                    <div className={cn(
+                        "mb-4 flex h-12 w-12 items-center justify-center rounded-full",
+                        variant === "danger" ? "bg-red-500/10 text-red-500" : "bg-[var(--primary)]/10 text-[var(--primary)]"
+                    )}>
+                        <AlertTriangle className="h-6 w-6" />
                     </div>
 
-                    <div className="flex border-t border-[var(--border)]">
-                        <button
+                    <h3 className="mb-2 text-lg font-bold text-[var(--foreground)]">
+                        {title}
+                    </h3>
+                    {description && (
+                        <p className="mb-6 text-sm text-[var(--muted)] whitespace-pre-wrap">
+                            {description}
+                        </p>
+                    )}
+
+                    <div className="flex w-full gap-3">
+                        <Button
+                            variant="secondary"
                             onClick={onClose}
-                            className="flex-1 px-4 py-3 text-sm font-medium text-[var(--muted)] hover:bg-[var(--secondary)] transition-colors"
+                            className="flex-1 font-bold border-[var(--border)]"
                         >
-                            {cancelText}
-                        </button>
-                        <div className="w-[1px] bg-[var(--border)]" />
-                        <button
+                            {cancelText || t("common.cancel") || "Cancel"}
+                        </Button>
+                        <Button
                             onClick={() => {
                                 onConfirm();
                                 onClose();
                             }}
-                            className={`flex-1 px-4 py-3 text-sm font-bold hover:bg-[var(--secondary)] transition-colors ${isDestructive ? 'text-red-500' : 'text-[var(--primary)]'}`}
+                            className={cn(
+                                "flex-1 font-bold text-white",
+                                variant === "danger" ? "bg-red-500 hover:bg-red-600" : "bg-[var(--primary)] hover:opacity-90"
+                            )}
                         >
-                            {confirmText}
-                        </button>
+                            {confirmText || t("common.confirm") || "Confirm"}
+                        </Button>
                     </div>
-                </motion.div>
-            </div>
-        </AnimatePresence>
+                </div>
+            </Card>
+        </div>
     );
 }

@@ -166,21 +166,21 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         language: "ko" as "ko" | "en",
         theme: "dark" as "dark" | "light" | "custom",
         customColors: {
-            background: "#0f172a",
-            card: "rgba(30, 41, 59, 0.7)",
-            primary: "#10b981",
-            secondary: "#334155",
-            accent: "#06b6d4",
-            text: "#f8fafc",
-            border: "rgba(255, 255, 255, 0.1)",
-            muted: "#64748b",
-            feeding: "#10b981",
-            poop: "#d97706",
-            cleaning: "#3b82f6",
-            memo: "#a855f7",
-            success: "#10b981",
-            danger: "#ef4444",
-            weight: "#ec4899"
+            background: "#fff1f4",
+            card: "#ffffff",
+            primary: "#ff5c8d",
+            secondary: "#ffdee6",
+            accent: "#ff8da1",
+            text: "#5c1d33",
+            border: "#ffdae3",
+            muted: "#a88090",
+            feeding: "#ff5c8d",
+            poop: "#8c6e7a",
+            cleaning: "#ff85b3",
+            memo: "#ffcc66",
+            success: "#ff5c8d",
+            danger: "#ff0055",
+            weight: "#ff70a1"
         }
     });
 

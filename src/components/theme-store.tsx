@@ -4,12 +4,14 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useReptileLogs } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { Loader2, Heart, Download, Upload, Palette, Trash2 } from "lucide-react";
+import { Loader2, Heart, Download, Upload, Palette, Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ko, enUS } from "date-fns/locale";
 import { AlertDialog } from "@/components/alert-dialog";
 import { ThemePublishDialog } from "@/components/theme-publish-dialog";
+import { ThemeRenameDialog } from "@/components/theme-rename-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Toast } from "@/components/toast";
 
 interface Theme {
@@ -40,6 +42,8 @@ export function ThemeStore() {
         isOpen: false,
         message: ""
     });
+    const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
+    const [themeToDelete, setThemeToDelete] = useState<string | null>(null);
 
     // Auth-dependent processing
     const currentUserId = session?.user?.id;
@@ -174,8 +178,6 @@ export function ThemeStore() {
     };
 
     const handleDeleteTheme = async (themeId: string) => {
-        if (!confirm(t("settings.theme_delete_confirm"))) return;
-
         try {
             const { error } = await supabase.from('themes').delete().eq('id', themeId);
             if (error) throw error;
@@ -193,6 +195,27 @@ export function ThemeStore() {
                 description: "Failed to delete theme",
                 type: "error"
             });
+        }
+    };
+
+    const handleRenameTheme = async (newName: string) => {
+        if (!editingTheme) return;
+        try {
+            const { error } = await supabase
+                .from('themes')
+                .update({ name: newName })
+                .eq('id', editingTheme.id);
+
+            if (error) throw error;
+
+            setToastState({
+                isOpen: true,
+                message: t("common.save_success") || "Saved!"
+            });
+            fetchThemes();
+        } catch (error) {
+            console.error("Rename error:", error);
+            alert("Failed to rename theme");
         }
     };
 
@@ -285,12 +308,22 @@ export function ThemeStore() {
                                         {formatDistanceToNow(new Date(theme.created_at), { addSuffix: true })}
                                     </div>
                                     {session?.user?.id === theme.user_id && (
-                                        <button
-                                            onClick={() => handleDeleteTheme(theme.id)}
-                                            className="p-1 text-[var(--muted)] hover:text-red-500 transition-colors"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setEditingTheme(theme)}
+                                                className="p-1 text-[var(--muted)] hover:text-[var(--primary)] transition-colors"
+                                                title={t("common.edit")}
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => setThemeToDelete(theme.id)}
+                                                className="p-1 text-[var(--muted)] hover:text-red-500 transition-colors"
+                                                title={t("common.delete")}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -343,7 +376,7 @@ export function ThemeStore() {
                             </div>
                         )
                     }
-                </div >
+                </div>
             )}
 
             <AlertDialog
@@ -363,11 +396,27 @@ export function ThemeStore() {
                 )
             }
 
+            {editingTheme && (
+                <ThemeRenameDialog
+                    initialName={editingTheme.name}
+                    onClose={() => setEditingTheme(null)}
+                    onRename={handleRenameTheme}
+                />
+            )}
+
+            <ConfirmDialog
+                isOpen={!!themeToDelete}
+                onClose={() => setThemeToDelete(null)}
+                onConfirm={() => themeToDelete && handleDeleteTheme(themeToDelete)}
+                title={t("settings.theme_delete_confirm")}
+                variant="danger"
+            />
+
             <Toast
                 message={toastState.message}
                 isVisible={toastState.isOpen}
                 onClose={() => setToastState(prev => ({ ...prev, isOpen: false }))}
             />
-        </div >
+        </div>
     );
 }

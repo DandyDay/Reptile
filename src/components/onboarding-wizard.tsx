@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Check } from "lucide-react";
+import { AuthDialog } from "@/components/auth-dialog";
 
 interface OnboardingWizardProps {
     onComplete: () => void;
@@ -29,6 +30,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const { addReptile, addFoodPreset } = useReptileLogs();
     const { t } = useTranslation();
     const [step, setStep] = useState<"welcome" | "reptile" | "presets">("welcome");
+    const [showAuthDialog, setShowAuthDialog] = useState(false);
 
     // Reptile Form State
     const [name, setName] = useState("");
@@ -96,6 +98,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 <Button onClick={nextStep} className="w-full h-14 rounded-2xl text-lg font-bold mt-4">
                                     {t("onboarding.start")}
                                 </Button>
+
+                                <div className="pt-4 text-sm">
+                                    <span className="text-[var(--muted)]">{t("onboarding.already_have_account")} </span>
+                                    <button
+                                        onClick={() => setShowAuthDialog(true)}
+                                        className="font-bold text-[var(--primary)] hover:underline"
+                                    >
+                                        {t("onboarding.login")}
+                                    </button>
+                                </div>
                             </motion.div>
                         )}
 
@@ -223,6 +235,14 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     </AnimatePresence>
                 </div>
             </motion.div>
+
+            <AnimatePresence>
+                {showAuthDialog && (
+                    <div className="fixed inset-0 z-[250]">
+                        <AuthDialog onClose={() => setShowAuthDialog(false)} />
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

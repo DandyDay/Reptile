@@ -30,51 +30,88 @@ export default function PostDetailPage() {
 
     const locale = visualSettings.language === 'ko' ? ko : enUS;
 
-    useEffect(() => {
-        const fetchPost = async () => {
-            if (!id) return;
-            setIsLoading(true);
+    const fetchPost = async () => {
+        if (!id) return;
+        setIsLoading(true);
 
-            // Fetch post
-            const { data, error } = await supabase
-                .from('posts')
-                .select(`
-                    *,
-                    profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url )
-                `)
-                .eq('id', id)
-                .single();
+        // Fetch post
+        const { data, error } = await supabase
+            .from('posts')
+            .select(`
+                *,
+                profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url ),
+                likes(count),
+                comments(count)
+            `)
+            .eq('id', id)
+            .single();
 
-            if (error) {
-                console.error("Error fetching post:", error);
-                setError("게시글을 불러올 수 없습니다.");
-                setIsLoading(false);
-                return;
-            }
-
-            if (data) {
-                let isLiked = false;
-                if (session?.user) {
-                    const { data: likeData } = await supabase
-                        .from('likes')
-                        .select('post_id')
-                        .eq('user_id', session.user.id)
-                        .eq('post_id', id)
-                        .single();
-                    if (likeData) isLiked = true;
-                }
-
-                setPost({
-                    ...data,
-                    image_urls: Array.isArray(data.image_urls) ? data.image_urls.map((url: any) => String(url)) : [],
-                    likes_count: data.likes_count || 0,
-                    isLiked
-                });
-            }
+        if (error) {
+            console.error("Error fetching post:", error);
+            setError("게시글을 불러올 수 없습니다.");
             setIsLoading(false);
-        };
+            return;
+        }
 
+        if (data) {
+            let isLiked = false;
+            if (session?.user) {
+                const { data: likeData } = await supabase
+                    .from('likes')
+                    .select('post_id')
+                    .eq('user_id', session.user.id)
+                    .eq('post_id', id)
+                    .single();
+                if (likeData) isLiked = true;
+            }
+
+            const postData = data as any;
+            setPost({
+                ...postData,
+                image_urls: Array.isArray(postData.image_urls) ? postData.image_urls.map((url: any) => String(url)) : [],
+                likes_count: postData.likes && postData.likes[0] ? postData.likes[0].count : (postData.likes_count || 0),
+                comments_count: postData.comments && postData.comments[0] ? postData.comments[0].count : (postData.comments_count || 0),
+                isLiked
+            });
+        }
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
         fetchPost();
+
+        // Subscribe to changes for this specific post
+        const postChannel = supabase
+            .channel(`post-${id}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'posts',
+                filter: `id=eq.${id}`
+            }, () => {
+                fetchPost();
+            })
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'likes',
+                filter: `post_id=eq.${id}`
+            }, () => {
+                fetchPost();
+            })
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'comments',
+                filter: `post_id=eq.${id}`
+            }, () => {
+                fetchPost();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(postChannel);
+        };
     }, [id, session]);
 
     const handleLike = async (postId: string, isLiked: boolean) => {
@@ -184,7 +221,7 @@ export default function PostDetailPage() {
 
             {/* Header */}
             <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-[var(--background)]/80 border-b border-[var(--border)]">
-                <div className="px-4 h-14 flex items-center gap-4">
+                <div className="mx-auto max-w-xl px-4 h-14 flex items-center gap-4">
                     <button
                         onClick={() => router.push('/community')}
                         className="p-1 -ml-1 rounded-full hover:bg-[var(--secondary)] transition-colors"
@@ -195,7 +232,7 @@ export default function PostDetailPage() {
                 </div>
             </header>
 
-            <main className="p-4">
+            <main className="mx-auto max-w-xl p-4">
                 <PostCard
                     post={post}
                     locale={locale}
@@ -213,7 +250,7 @@ export default function PostDetailPage() {
                 description="이 게시물을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
                 confirmText={t("common.delete")}
                 cancelText={t("common.cancel")}
-                isDestructive
+                variant="danger"
             />
         </div>
     );
