@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReptileTagModal } from "./components/reptile-tag-modal";
 import { ko, enUS } from "date-fns/locale";
 import { Post } from "./types";
+import { motion } from "framer-motion";
 import { PostCard } from "./components/post-card";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,13 @@ export default function CommunityPage() {
     // Delete confirmation state
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [postToDelete, setPostToDelete] = useState<string | null>(null);
+
+    // Edit state
+    const [editingPostId, setEditingPostId] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState("");
+    const [editTagReptileId, setEditTagReptileId] = useState<string | null>(null);
+    const [showEditTagModal, setShowEditTagModal] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
 
     const locale = visualSettings.language === 'ko' ? ko : enUS;
 
@@ -122,12 +130,15 @@ export default function CommunityPage() {
     // Handle image selection
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        if (files.length + selectedImages.length > 4) {
-            alert('최대 4장까지 선택 가능합니다.');
+        const remainingSlots = 4 - selectedImages.length;
+
+        if (files.length > remainingSlots) {
+            alert(`최대 4장까지 선택 가능합니다. (현재 ${selectedImages.length}장 선택됨, ${remainingSlots}장 더 추가 가능)`);
+            e.target.value = ''; // Reset input
             return;
         }
 
-        const newFiles = files.slice(0, 4 - selectedImages.length);
+        const newFiles = files.slice(0, remainingSlots);
         setSelectedImages(prev => [...prev, ...newFiles]);
 
         // Create previews
@@ -138,6 +149,8 @@ export default function CommunityPage() {
             };
             reader.readAsDataURL(file);
         });
+
+        e.target.value = ''; // Reset input for next selection
     };
 
     const removeImage = (index: number) => {
@@ -206,11 +219,11 @@ export default function CommunityPage() {
                 await fetchPosts();
             } else {
                 console.error('Post error:', error);
-                alert("게시 실패: " + error.message);
+                alert(t("community.post_failed") + ": " + error.message);
             }
         } catch (err) {
             console.error('Error creating post:', err);
-            alert("게시 중 오류가 발생했습니다.");
+            alert(t("community.post_error"));
         }
         setIsPosting(false);
     };
@@ -327,6 +340,63 @@ export default function CommunityPage() {
         await supabase.auth.signOut();
     };
 
+    const promptEdit = (postId: string) => {
+        const post = posts.find(p => p.id === postId);
+        if (post) {
+            setEditingPostId(postId);
+            setEditContent(post.content || "");
+            setEditTagReptileId(post.reptile_id || null);
+        }
+    };
+
+    const handleUpdatePost = async () => {
+        if (!editingPostId || !editContent.trim()) return;
+
+        setIsUpdating(true);
+        const { error } = await supabase
+            .from('posts')
+            .update({
+                content: editContent,
+                reptile_id: editTagReptileId
+            })
+            .eq('id', editingPostId);
+
+        if (!error) {
+            // Fetch updated post with reptile info
+            const { data: updatedPost } = await supabase
+                .from('posts')
+                .select(`
+                    *,
+                    profiles!posts_user_id_fkey(username, full_name, avatar_url),
+                    reptiles(id, name, species, photo_url)
+                `)
+                .eq('id', editingPostId)
+                .single();
+
+            if (updatedPost) {
+                setPosts(prev => prev.map(p => {
+                    if (p.id === editingPostId) {
+                        return { ...updatedPost, isLiked: p.isLiked, image_urls: (updatedPost.image_urls as any) || [] } as Post;
+                    }
+                    return p;
+                }));
+            }
+            setEditingPostId(null);
+            setEditContent("");
+            setEditTagReptileId(null);
+        } else {
+            console.error(error);
+            alert("수정 실패");
+        }
+        setIsUpdating(false);
+    };
+
+    const cancelEdit = () => {
+        setEditingPostId(null);
+        setEditContent("");
+        setEditTagReptileId(null);
+    };
+
     // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
@@ -338,6 +408,91 @@ export default function CommunityPage() {
     return (
         <div className="min-h-screen bg-[var(--background)] pb-24 text-[var(--foreground)]">
             {showAuthDialog && <AuthDialog onClose={() => setShowAuthDialog(false)} />}
+
+            {/* Edit Modal */}
+            {editingPostId && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="w-full max-w-lg bg-[var(--card)] rounded-3xl border border-[var(--border)] shadow-2xl overflow-hidden"
+                    >
+                        <div className="p-6 border-b border-[var(--border)]">
+                            <h3 className="text-lg font-black text-[var(--foreground)]">{t("common.edit_post")}</h3>
+                        </div>
+                        <div className="p-6">
+                            <textarea
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                className="w-full min-h-[150px] bg-[var(--background)] border border-[var(--border)] rounded-2xl p-4 text-sm outline-none focus:border-[var(--primary)] transition-colors resize-none"
+                                placeholder="내용을 입력하세요..."
+                            />
+
+                            {/* Tag Button */}
+                            <div className="mt-4">
+                                <button
+                                    onClick={() => setShowEditTagModal(true)}
+                                    disabled={myReptiles.length === 0}
+                                    className={cn(
+                                        "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all disabled:opacity-30 border-2",
+                                        editTagReptileId
+                                            ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)] shadow-lg shadow-[var(--primary)]/10"
+                                            : "border-transparent text-[var(--muted)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]"
+                                    )}
+                                >
+                                    {editTagReptileId ? (() => {
+                                        const r = myReptiles.find(rep => rep.id === editTagReptileId);
+                                        if (!r) return <Turtle className="h-5 w-5" />;
+                                        const isImg = r.avatar.startsWith('data:') || r.avatar.startsWith('http');
+                                        return (
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-5 w-5 rounded-full overflow-hidden flex items-center justify-center border border-[var(--primary)]/30 bg-[var(--card)]">
+                                                    {isImg ? (
+                                                        <img src={r.avatar} alt="" className="h-full w-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-[10px]">{r.avatar}</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs font-black">{r.name}</span>
+                                            </div>
+                                        );
+                                    })() : (
+                                        <>
+                                            <Turtle className="h-5 w-5" />
+                                            <span className="text-xs font-bold">{t("community.tag_pet")}</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6 pt-0 flex gap-3">
+                            <button
+                                onClick={cancelEdit}
+                                disabled={isUpdating}
+                                className="flex-1 h-12 rounded-2xl font-bold bg-[var(--secondary)] hover:bg-[var(--secondary)]/80 text-[var(--foreground)] transition-colors disabled:opacity-50"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleUpdatePost}
+                                disabled={isUpdating || !editContent.trim()}
+                                className="flex-1 h-12 rounded-2xl font-bold bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white transition-all disabled:opacity-50 shadow-lg shadow-[var(--primary)]/20"
+                            >
+                                {isUpdating ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : "수정 완료"}
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Edit Tag Modal */}
+            <ReptileTagModal
+                isOpen={showEditTagModal}
+                onClose={() => setShowEditTagModal(false)}
+                reptiles={myReptiles}
+                selectedId={editTagReptileId}
+                onSelect={setEditTagReptileId}
+            />
 
             {/* Header */}
             <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-[var(--background)]/80 border-b border-[var(--border)]">
@@ -447,7 +602,7 @@ export default function CommunityPage() {
                                 })() : (
                                     <>
                                         <Turtle className="h-5 w-5" />
-                                        <span className="text-xs font-bold">Tag Pet</span>
+                                        <span className="text-xs font-bold">{t("community.tag_pet")}</span>
                                     </>
                                 )}
                             </button>
@@ -458,7 +613,7 @@ export default function CommunityPage() {
                             disabled={isPosting || (!newPostContent.trim() && selectedImages.length === 0)}
                             className="px-6 py-2 rounded-full bg-[var(--primary)] text-white font-black text-sm disabled:opacity-50 hover:opacity-90 transition-all shadow-lg shadow-[var(--primary)]/20 active:scale-95"
                         >
-                            {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : "게시"}
+                            {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.post")}
                         </button>
                     </div>
                 </div>
@@ -483,6 +638,7 @@ export default function CommunityPage() {
                             isOwner={session?.user?.id === post.user_id}
                             onLike={() => handleLike(post.id, post.isLiked || false)}
                             onDelete={() => promptDelete(post.id)}
+                            onEdit={() => promptEdit(post.id)}
                         />
                     ))
                 )}

@@ -5,7 +5,8 @@
         "save": "Save",
         "delete": "Delete",
         "confirm": "Confirm",
-        "edit": "Edit",
+        "edit": "Edit Post",
+        "edit_post": "Edit Post",
         "save_success": "Saved successfully!",
         "emoji": "Emoji",
         "photo": "Photo",
@@ -183,7 +184,11 @@
         "login_required": "Login required.",
         "comment_failed": "Failed to post comment",
         "share_success": "URL copied to clipboard.",
-        "tag_profile": "Tag Profile"
+        "tag_profile": "Tag Profile",
+        "post": "Post",
+        "tag_pet": "Tag Pet",
+        "post_failed": "Failed to post",
+        "post_error": "An error occurred while posting"
     },
     "onboarding": {
         "welcome_title": "Welcome! 👋",

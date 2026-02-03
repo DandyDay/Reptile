@@ -239,6 +239,7 @@ export default function PostDetailPage() {
                     isOwner={session?.user?.id === post.user_id}
                     onLike={() => handleLike(post.id, post.isLiked || false)}
                     onDelete={() => setDeleteConfirmOpen(true)}
+                    onEdit={() => router.push('/community')}
                 />
             </main>
 

@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import {
     MoreHorizontal, Share2, MessageCircle, ChevronLeft, ChevronRight,
-    Loader2, Trash2, Send, Heart
+    Loader2, Trash2, Send, Heart, Edit3
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
@@ -20,6 +20,7 @@ interface PostCardProps {
     isOwner: boolean;
     onLike: () => void;
     onDelete: () => void;
+    onEdit: () => void;
 }
 
 export function PostCard({
@@ -27,7 +28,8 @@ export function PostCard({
     locale,
     isOwner,
     onLike,
-    onDelete
+    onDelete,
+    onEdit
 }: PostCardProps) {
     const { t } = useTranslation();
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -248,13 +250,21 @@ export function PostCard({
                         {showMenu && (
                             <>
                                 <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                                <div className="absolute right-0 top-6 z-20 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg overflow-hidden">
+                                <div className="absolute right-0 top-6 z-20 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden min-w-[140px]">
+                                    <button
+                                        onClick={() => { onEdit(); setShowMenu(false); }}
+                                        className="flex items-center gap-2 px-4 py-2.5 text-[var(--foreground)] hover:bg-[var(--secondary)] w-full transition-colors"
+                                    >
+                                        <Edit3 className="h-4 w-4" />
+                                        <span className="text-sm font-medium">{t("common.edit")}</span>
+                                    </button>
+                                    <div className="h-px bg-[var(--border)]" />
                                     <button
                                         onClick={() => { onDelete(); setShowMenu(false); }}
-                                        className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 w-full"
+                                        className="flex items-center gap-2 px-4 py-2.5 text-red-500 hover:bg-red-500/10 w-full transition-colors"
                                     >
                                         <Trash2 className="h-4 w-4" />
-                                        <span className="text-sm">{t("common.delete")}</span>
+                                        <span className="text-sm font-medium">{t("common.delete")}</span>
                                     </button>
                                 </div>
                             </>

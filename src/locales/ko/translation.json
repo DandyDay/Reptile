@@ -5,7 +5,8 @@
         "save": "저장",
         "delete": "삭제",
         "confirm": "확인",
-        "edit": "메모 수정",
+        "edit": "게시글 수정",
+        "edit_post": "게시글 수정",
         "save_success": "저장되었습니다!",
         "emoji": "이모지",
         "photo": "사진",
@@ -183,7 +184,11 @@
         "login_required": "로그인이 필요합니다.",
         "comment_failed": "댓글 작성 실패",
         "share_success": "URL이 복사되었습니다.",
-        "tag_profile": "프로필 태그하기"
+        "tag_profile": "프로필 태그하기",
+        "post": "게시",
+        "tag_pet": "태그하기",
+        "post_failed": "게시 실패",
+        "post_error": "게시 중 오류가 발생했습니다"
     },
     "onboarding": {
         "welcome_title": "만나서 반가워요! 👋",
