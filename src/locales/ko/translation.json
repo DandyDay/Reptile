@@ -86,7 +86,8 @@
         "title": "대시보드",
         "last_fed": "마지막 먹이",
         "last_poop": "마지막 배변",
-        "last_cleaning": "마지막 청소"
+        "last_cleaning": "마지막 청소",
+        "last_30_days": "최근 30일"
     },
     "settings": {
         "title": "파충류 관리",

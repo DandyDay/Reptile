@@ -64,7 +64,7 @@ export default function StatsPage() {
                 <Card className="p-6 border-[var(--border)] overflow-hidden">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-black">{t("calendar.weight")} {t("community.feed")}</h3>
-                        <div className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">Last 30 Days</div>
+                        <div className="text-xs text-[var(--muted)] font-bold uppercase tracking-wider">{t("dashboard.last_30_days")}</div>
                     </div>
 
                     <div className="h-64 w-full relative group/chart">

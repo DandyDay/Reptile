@@ -653,7 +653,7 @@ function SettingsContent() {
                                                     <input
                                                         type="range"
                                                         min="1"
-                                                        max="30"
+                                                        max="7"
                                                         value={feedingDays}
                                                         onChange={(e) => setFeedingDays(parseInt(e.target.value))}
                                                         className="flex-1 accent-[var(--primary)]"
@@ -740,7 +740,7 @@ function SettingsContent() {
                                                     <input
                                                         type="range"
                                                         min="1"
-                                                        max="60"
+                                                        max="7"
                                                         value={cleaningDays}
                                                         onChange={(e) => setCleaningDays(parseInt(e.target.value))}
                                                         className="flex-1 accent-[var(--primary)]"

@@ -86,7 +86,8 @@
         "title": "Dashboard",
         "last_fed": "Last Fed",
         "last_poop": "Last Poop",
-        "last_cleaning": "Last Cleaning"
+        "last_cleaning": "Last Cleaning",
+        "last_30_days": "Last 30 Days"
     },
     "settings": {
         "title": "Manage Reptiles",
