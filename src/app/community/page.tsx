@@ -6,17 +6,19 @@ import { useReptileLogs } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import {
     MessageSquare, X, Image as ImageIcon,
-    LogIn, LogOut, Loader2
+    LogIn, LogOut, Loader2, Tag, Turtle
 } from "lucide-react";
 import { AuthDialog } from "@/components/auth-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ReptileTagModal } from "./components/reptile-tag-modal";
 import { ko, enUS } from "date-fns/locale";
 import { Post } from "./types";
 import { PostCard } from "./components/post-card";
+import { cn } from "@/lib/utils";
 
 export default function CommunityPage() {
     const { t } = useTranslation();
-    const { session, visualSettings } = useReptileLogs();
+    const { session, visualSettings, reptiles: myReptiles } = useReptileLogs();
     const [showAuthDialog, setShowAuthDialog] = useState(false);
 
     // Feed State
@@ -26,7 +28,10 @@ export default function CommunityPage() {
     const [isPosting, setIsPosting] = useState(false);
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    const [selectedTagReptileId, setSelectedTagReptileId] = useState<string | null>(null);
+    const [showTagModal, setShowTagModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Profile State
     const [myProfile, setMyProfile] = useState<any>(null);
@@ -48,7 +53,8 @@ export default function CommunityPage() {
                 *,
                 profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url ),
                 likes(count),
-                comments(count)
+                comments(count),
+                reptiles:reptile_id ( name, species, photo_url )
             `)
             .order('created_at', { ascending: false });
 
@@ -187,13 +193,15 @@ export default function CommunityPage() {
             const { error } = await supabase.from('posts').insert({
                 content: newPostContent,
                 user_id: session.user.id,
-                image_urls: imageUrls
+                image_urls: imageUrls,
+                reptile_id: selectedTagReptileId
             });
 
             if (!error) {
                 setNewPostContent("");
                 setSelectedImages([]);
                 setImagePreviews([]);
+                setSelectedTagReptileId(null);
                 // Manually refresh posts since realtime might not be enabled
                 await fetchPosts();
             } else {
@@ -319,6 +327,14 @@ export default function CommunityPage() {
         await supabase.auth.signOut();
     };
 
+    // Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+        }
+    }, [newPostContent]);
+
     return (
         <div className="min-h-screen bg-[var(--background)] pb-24 text-[var(--foreground)]">
             {showAuthDialog && <AuthDialog onClose={() => setShowAuthDialog(false)} />}
@@ -355,14 +371,17 @@ export default function CommunityPage() {
                                 "👤"
                             )}
                         </div>
-                        <textarea
-                            value={newPostContent}
-                            onChange={(e) => setNewPostContent(e.target.value)}
-                            placeholder={session ? t("community.whats_happening") : "로그인하고 게시하기..."}
-                            disabled={!session}
-                            rows={2}
-                            className="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--muted)] resize-none"
-                        />
+                        <div className="flex-1 flex flex-col pt-1">
+                            <textarea
+                                ref={textareaRef}
+                                value={newPostContent}
+                                onChange={(e) => setNewPostContent(e.target.value)}
+                                placeholder={session ? t("community.whats_happening") : "로그인하고 게시하기..."}
+                                disabled={!session}
+                                rows={2}
+                                className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--muted)] resize-none transition-[height] duration-100 ease-out overflow-y-auto"
+                            />
+                        </div>
                     </div>
 
                     {/* Image Previews */}
@@ -382,27 +401,62 @@ export default function CommunityPage() {
                         </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleImageSelect}
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                        />
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={!session || selectedImages.length >= 4}
-                            className="flex items-center gap-1 text-[var(--primary)] text-sm font-medium disabled:opacity-50"
-                        >
-                            <ImageIcon className="h-5 w-5" />
-                            <span>사진 {selectedImages.length}/4</span>
-                        </button>
+                    <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={!session || selectedImages.length >= 4}
+                                className="p-2 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-full transition-colors disabled:opacity-30 relative"
+                                title="사진 추가"
+                            >
+                                <ImageIcon className="h-5.5 w-5.5" />
+                                {selectedImages.length > 0 && (
+                                    <span className="absolute top-1 right-1 bg-[var(--primary)] text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-[var(--card)]">
+                                        {selectedImages.length}
+                                    </span>
+                                )}
+                            </button>
+
+                            <button
+                                onClick={() => setShowTagModal(true)}
+                                disabled={!session || myReptiles.length === 0}
+                                className={cn(
+                                    "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all disabled:opacity-30 border-2",
+                                    selectedTagReptileId
+                                        ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)] shadow-lg shadow-[var(--primary)]/10"
+                                        : "border-transparent text-[var(--muted)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]"
+                                )}
+                                title="파충류 태그"
+                            >
+                                {selectedTagReptileId ? (() => {
+                                    const r = myReptiles.find(rep => rep.id === selectedTagReptileId);
+                                    if (!r) return <Turtle className="h-5 w-5" />;
+                                    const isImg = r.avatar.startsWith('data:') || r.avatar.startsWith('http');
+                                    return (
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-5 w-5 rounded-full overflow-hidden flex items-center justify-center border border-[var(--primary)]/30 bg-[var(--card)]">
+                                                {isImg ? (
+                                                    <img src={r.avatar} alt="" className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <span className="text-[10px]">{r.avatar}</span>
+                                                )}
+                                            </div>
+                                            <span className="text-xs font-black">{r.name}</span>
+                                        </div>
+                                    );
+                                })() : (
+                                    <>
+                                        <Turtle className="h-5 w-5" />
+                                        <span className="text-xs font-bold">Tag Pet</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
                         <button
                             onClick={handleCreatePost}
                             disabled={isPosting || (!newPostContent.trim() && selectedImages.length === 0)}
-                            className="px-4 py-1.5 rounded-full bg-[var(--primary)] text-white font-bold text-sm disabled:opacity-50"
+                            className="px-6 py-2 rounded-full bg-[var(--primary)] text-white font-black text-sm disabled:opacity-50 hover:opacity-90 transition-all shadow-lg shadow-[var(--primary)]/20 active:scale-95"
                         >
                             {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : "게시"}
                         </button>
@@ -443,6 +497,14 @@ export default function CommunityPage() {
                 confirmText={t("common.delete")}
                 cancelText={t("common.cancel")}
                 variant="danger"
+            />
+
+            <ReptileTagModal
+                isOpen={showTagModal}
+                onClose={() => setShowTagModal(false)}
+                reptiles={myReptiles}
+                selectedId={selectedTagReptileId}
+                onSelect={setSelectedTagReptileId}
             />
         </div>
     );

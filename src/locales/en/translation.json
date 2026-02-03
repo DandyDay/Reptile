@@ -182,7 +182,8 @@
         "no_comments": "No comments yet.",
         "login_required": "Login required.",
         "comment_failed": "Failed to post comment",
-        "share_success": "URL copied to clipboard."
+        "share_success": "URL copied to clipboard.",
+        "tag_profile": "Tag Profile"
     },
     "onboarding": {
         "welcome_title": "Welcome! 👋",

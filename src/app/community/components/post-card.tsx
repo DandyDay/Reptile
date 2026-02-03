@@ -205,9 +205,33 @@ export function PostCard({
                         ) : "🦎"}
                     </div>
                     <div>
-                        <h3 className="text-sm font-bold text-[var(--foreground)]">
-                            {post.profiles?.full_name || post.profiles?.username || "Unknown"}
-                        </h3>
+                        <div className="flex items-center gap-2 max-w-[200px] sm:max-w-[300px]">
+                            <h3 className="text-sm font-bold text-[var(--foreground)] truncate">
+                                {post.profiles?.full_name || post.profiles?.username || "Unknown"}
+                            </h3>
+                            {post.reptiles && (() => {
+                                const isReptileImage = post.reptiles.photo_url?.startsWith("data:") || post.reptiles.photo_url?.startsWith("http");
+                                return (
+                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--primary)]/5 border border-[var(--primary)]/10 group-hover:bg-[var(--primary)]/10 transition-colors shrink-0 max-w-[120px]">
+                                        <div className="h-4 w-4 rounded-full overflow-hidden bg-[var(--card)] flex items-center justify-center border border-[var(--primary)]/20 shrink-0">
+                                            {isReptileImage ? (
+                                                <img src={post.reptiles.photo_url!} alt="" className="h-full w-full object-cover" />
+                                            ) : (
+                                                <span className="text-[10px] select-none leading-none">{post.reptiles.photo_url || "🦎"}</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-baseline gap-1 min-w-0">
+                                            <span className="text-[10px] font-black text-[var(--primary)] leading-none truncate">
+                                                {post.reptiles.name}
+                                            </span>
+                                            <span className="text-[9px] text-[var(--muted)] font-medium leading-none truncate">
+                                                {post.reptiles.species}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
                         <p className="text-[10px] text-[var(--muted)] font-medium">
                             {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale })}
                         </p>

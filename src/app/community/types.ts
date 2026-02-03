@@ -13,6 +13,12 @@ export interface Post {
         avatar_url: string | null;
     } | null;
     isLiked?: boolean;
+    reptile_id?: string;
+    reptiles?: {
+        name: string;
+        species: string;
+        photo_url: string;
+    } | null;
 }
 
 export interface Comment {
