@@ -3,7 +3,7 @@ description: Build, verify, commit, and push changes to remote
 ---
 
 1. Run the build command to verify project integrity.
-   - Command: `npm run build`
+   - Command: `export PATH=$PATH:/Users/jinho/.nvm/versions/node/v24.11.0/bin && npm run build`
    - If the build fails:
      - Analyze the error log.
      - Fix the code issues.

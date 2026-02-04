@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -105,6 +105,13 @@ export function PostCard({
     const [commentCount, setCommentCount] = useState(post.comments_count || 0);
     const [hasLoadedComments, setHasLoadedComments] = useState(false);
     const [showAuthDialog, setShowAuthDialog] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data }) => {
+            setCurrentUserId(data.session?.user?.id || null);
+        });
+    }, []);
 
     // Sync with props when they change (due to realtime updates in parent)
     React.useEffect(() => {
@@ -139,8 +146,41 @@ export function PostCard({
         setShowComments(!showComments);
     };
 
+    const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
+
+    const handleDeleteCommentClick = (commentId: string) => {
+        setCommentToDelete(commentId);
+    };
+
+    const executeDeleteComment = async () => {
+        if (!commentToDelete) return;
+
+        const { error } = await supabase
+            .from('comments')
+            .delete()
+            .eq('id', commentToDelete);
+
+        if (!error) {
+            setComments(prev => prev.filter(c => c.id !== commentToDelete));
+            setCommentCount(prev => Math.max(0, prev - 1));
+        } else {
+            console.error(error);
+            alert("삭제 실패");
+        }
+        setCommentToDelete(null);
+    };
+
+    const [replyTo, setReplyTo] = useState<{ id: string, name: string } | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleReply = (id: string, name: string) => {
+        setReplyTo({ id, name });
+        inputRef.current?.focus();
+    };
+
     const handleSendComment = async () => {
-        if (!newComment.trim()) return;
+        if (isSendingComment) return;
+        if (!newComment.trim() && !replyTo) return;
 
         const { data: { session } } = await supabase.auth.getSession();
 
@@ -150,10 +190,22 @@ export function PostCard({
         }
 
         setIsSendingComment(true);
+
+        let finalContent = newComment;
+        // Internally store as a special format, e.g., "mentions:uuid space message" or just text.
+        // For now, we'll format it visually as @Name in text, but user wants internal UUID.
+        // We'll append a hidden marker or just use a standard convention.
+        // Let's go with: "@[uuid:name] message" which is common, or just prepend text if no parser exists.
+        // User asked: "internally store uuid, show as @who". 
+        // Without a parser: I will prepend `@{id}:${name} ` to the content so it can be parsed later.
+        if (replyTo) {
+            finalContent = `@{${replyTo.id}:${replyTo.name}} ${newComment}`;
+        }
+
         const { data, error } = await supabase
             .from('comments')
             .insert({
-                content: newComment,
+                content: finalContent,
                 post_id: post.id,
                 user_id: session.user.id
             })
@@ -164,9 +216,13 @@ export function PostCard({
             .single();
 
         if (!error && data) {
+            // Optimistic/Local formatting for display right now? 
+            // The DB stores the raw string. We might need a parser to display it nicely later.
+            // For now, just save it.
             setComments(prev => [...prev, data as any]);
             setCommentCount(prev => prev + 1);
             setNewComment("");
+            setReplyTo(null);
         } else {
             console.error(error);
             alert(t("community.comment_failed"));
@@ -193,6 +249,40 @@ export function PostCard({
                 console.error('Failed to copy', err);
                 alert("링크 복사에 실패했습니다.");
             }
+        }
+    };
+
+    // Helper to parser content for display (simple version)
+    const renderCommentContent = (content: string) => {
+        const mentionRegex = /@\{([^:]+):([^}]+)\}/g;
+        const parts = [];
+        let lastIndex = 0;
+        let match;
+
+        while ((match = mentionRegex.exec(content)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push(content.slice(lastIndex, match.index));
+            }
+            // match[1] is UUID, match[2] is Name
+            parts.push(
+                <span key={match.index} className="text-[var(--primary)] font-bold bg-[var(--primary)]/10 px-1 rounded mx-0.5">
+                    @{match[2]}
+                </span>
+            );
+            lastIndex = mentionRegex.lastIndex;
+        }
+        if (lastIndex < content.length) {
+            parts.push(content.slice(lastIndex));
+        }
+        return parts.length > 0 ? parts : content;
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.nativeEvent.isComposing) return; // Prevent double firing on IME (Korean, etc)
+        if (e.key === 'Enter') {
+            handleSendComment();
+        } else if (e.key === 'Backspace' && newComment === '' && replyTo) {
+            setReplyTo(null);
         }
     };
 
@@ -383,21 +473,30 @@ export function PostCard({
                     >
                         <div className="p-4 space-y-4">
                             {/* Comment Input */}
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 items-center bg-[var(--background)] border border-[var(--border)] rounded-full px-3 py-2 transition-colors focus-within:border-[var(--primary)]">
+                                {replyTo && (
+                                    <span className="flex items-center gap-1 text-xs font-bold text-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 rounded-full shrink-0 animate-in fade-in slide-in-from-left-2">
+                                        @{replyTo.name}
+                                        <button onClick={() => setReplyTo(null)} className="hover:text-red-500 ml-1">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                    </span>
+                                )}
                                 <input
+                                    ref={inputRef}
                                     type="text"
                                     value={newComment}
                                     onChange={(e) => setNewComment(e.target.value)}
-                                    placeholder={t("community.write_comment")}
-                                    className="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-full px-4 py-2 text-sm outline-none focus:border-[var(--primary)]"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSendComment()}
+                                    placeholder={replyTo ? "" : t("community.write_comment")}
+                                    className="flex-1 bg-transparent text-sm outline-none min-w-[50px]"
+                                    onKeyDown={handleKeyDown}
                                 />
                                 <button
                                     onClick={handleSendComment}
-                                    disabled={!newComment.trim() || isSendingComment}
-                                    className="p-2 bg-[var(--primary)] text-white rounded-full disabled:opacity-50"
+                                    disabled={(!newComment.trim() && !replyTo) || isSendingComment}
+                                    className="p-1.5 bg-[var(--primary)] text-white rounded-full disabled:opacity-50 ml-auto shrink-0"
                                 >
-                                    {isSendingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                    {isSendingComment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                                 </button>
                             </div>
 
@@ -411,7 +510,7 @@ export function PostCard({
                             ) : (
                                 <div className="space-y-3 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
                                     {comments.map((comment) => (
-                                        <div key={comment.id} className="flex gap-2.5">
+                                        <div key={comment.id} className="flex gap-2.5 group">
                                             <div className="h-8 w-8 rounded-full bg-slate-500/20 shrink-0 overflow-hidden">
                                                 {comment.profiles?.avatar_url ? (
                                                     <img src={comment.profiles.avatar_url} alt="" className="h-full w-full object-cover" />
@@ -425,10 +524,29 @@ export function PostCard({
                                                     <span className="text-[10px] text-[var(--muted)]">
                                                         {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true, locale })}
                                                     </span>
+                                                    <button
+                                                        onClick={() => handleReply(comment.user_id, comment.profiles?.full_name || "Unknown")}
+                                                        className="text-[10px] text-[var(--primary)] font-medium opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+                                                    >
+                                                        Reply
+                                                    </button>
+                                                    {/* Delete Comment Button logic moved below */}
                                                 </div>
-                                                <p className="text-sm text-[var(--foreground)] leading-snug">
-                                                    {comment.content}
-                                                </p>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="text-sm text-[var(--foreground)] leading-snug flex-1">
+                                                        {renderCommentContent(comment.content)}
+                                                    </p>
+
+                                                    {/* Delete Comment Button - Only show if current user owns the comment */}
+                                                    {currentUserId === comment.user_id && (
+                                                        <button
+                                                            onClick={() => handleDeleteCommentClick(comment.id)}
+                                                            className="p-1 text-[var(--muted)] hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -444,6 +562,17 @@ export function PostCard({
                     <AuthDialog onClose={() => setShowAuthDialog(false)} />
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={!!commentToDelete}
+                onClose={() => setCommentToDelete(null)}
+                onConfirm={executeDeleteComment}
+                title={t("common.delete")}
+                description="댓글을 삭제하시겠습니까?"
+                confirmText={t("common.delete")}
+                cancelText={t("common.cancel")}
+                variant="danger"
+            />
         </div>
     );
 }

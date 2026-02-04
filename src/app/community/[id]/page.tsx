@@ -41,7 +41,8 @@ export default function PostDetailPage() {
                 *,
                 profiles:profiles!posts_user_id_fkey ( username, full_name, avatar_url ),
                 likes(count),
-                comments(count)
+                comments(count),
+                reptiles:reptile_id ( name, species, photo_url )
             `)
             .eq('id', id)
             .single();
