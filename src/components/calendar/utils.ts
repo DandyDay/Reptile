@@ -8,6 +8,7 @@ export const getLogIcon = (log: Log) => {
         case 'cleaning': return '🧹';
         case 'memo': return '📝';
         case 'weight': return '⚖️';
+        case 'misting': return '🚿';
         default: return log.type;
     }
 };

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
-export type LogType = "feeding" | "poop" | "cleaning" | "memo" | "weight";
+export type LogType = "feeding" | "poop" | "cleaning" | "memo" | "weight" | "misting";
 
 export interface CareSchedule {
     type: "feeding" | "cleaning";

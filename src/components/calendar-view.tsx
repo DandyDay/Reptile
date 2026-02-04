@@ -55,7 +55,19 @@ export function CalendarView() {
                 logs={logs}
                 currentReptile={currentReptile}
                 t={t}
-                onCheckTask={(type) => handleOpenForm(new Date(), type)}
+                onCheckTask={(type) => {
+                    if (type === 'cleaning' || type === 'poop') {
+                        addLog({
+                            type: type,
+                            date: new Date().toISOString(),
+                            details: type === 'cleaning'
+                                ? t("calendar.cleaning_spot")
+                                : t("calendar.condition_normal"),
+                        });
+                    } else {
+                        handleOpenForm(new Date(), type);
+                    }
+                }}
             />
 
             <div className="flex flex-col md:flex-row gap-6">
@@ -90,6 +102,24 @@ export function CalendarView() {
                     lang={visualSettings.language}
                     locale={locale}
                     onAddLog={() => handleOpenForm()}
+                    onQuickAdd={(type) => {
+                        if (type === 'misting') {
+                            addLog({
+                                type: 'misting',
+                                date: new Date().toISOString(),
+                                // No details needed or maybe empty string, keeping it clean
+                            });
+                        } else {
+                            addLog({
+                                type: type,
+                                date: new Date().toISOString(),
+                                details: type === 'cleaning'
+                                    ? t("calendar.cleaning_spot")
+                                    : t("calendar.condition_normal"),
+                                note: ''
+                            });
+                        }
+                    }}
                     allLogs={logs}
                 />
             </div>

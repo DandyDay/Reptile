@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trash2, Plus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Log, Reptile } from "@/lib/store";
+import { Log, Reptile, LogType } from "@/lib/store";
 import { getLogIcon } from "./utils";
 
+import { QuickLogButtons } from "./quick-log-buttons";
 import { TranslationKey } from "@/lib/i18n";
 
 interface CalendarLogListProps {
@@ -19,6 +20,7 @@ interface CalendarLogListProps {
     lang: 'ko' | 'en';
     locale: any;
     onAddLog: () => void;
+    onQuickAdd: (type: LogType) => void;
     allLogs: Log[]; // Needed for calculating overdue/scheduled status which looks back in history
 }
 
@@ -31,6 +33,7 @@ export function CalendarLogList({
     lang,
     locale,
     onAddLog,
+    onQuickAdd,
     allLogs
 }: CalendarLogListProps) {
     const renderLogItem = (log: Log) => (
@@ -139,7 +142,8 @@ export function CalendarLogList({
     );
 
     return (
-        <div className="w-full md:w-96 shrink-0 space-y-6">
+        <div className="w-full md:w-96 shrink-0 space-y-6 relative h-full">
+            <QuickLogButtons onQuickAdd={onQuickAdd} currentReptile={currentReptile} />
             <AnimatePresence mode="wait">
                 {selectedDate ? (
                     <motion.div
@@ -176,10 +180,13 @@ export function CalendarLogList({
                             )}
                         </div>
 
-                        <Button onClick={onAddLog} className="w-full h-14 rounded-2xl text-lg font-bold shadow-lg shadow-[var(--primary)]/20 hover:scale-[1.02] active:scale-95 transition-all">
-                            <Plus className="h-5 w-5 mr-2" />
-                            {t("calendar.add_log")}
-                        </Button>
+                        <button
+                            onClick={onAddLog}
+                            className="fixed bottom-6 right-6 md:absolute md:bottom-0 md:right-0 h-14 w-14 rounded-full bg-[var(--primary)] text-white shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-20"
+                            aria-label={t("calendar.add_log")}
+                        >
+                            <Plus className="h-6 w-6" />
+                        </button>
                     </motion.div>
                 ) : (
                     <motion.div

@@ -5,7 +5,7 @@ import { format, parseISO } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Utensils, Droplets, Sparkles, StickyNote,
-    Calendar as CalendarIcon, Clock
+    Calendar as CalendarIcon, Clock, SprayCan
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -79,6 +79,7 @@ export function CalendarLogForm({
         if (logType !== 'feeding' && !finalDetails) {
             if (logType === 'poop') finalDetails = t("calendar.condition_normal");
             if (logType === 'cleaning') finalDetails = t("calendar.cleaning_spot");
+            if (logType === 'misting') finalDetails = t("calendar.misting");
         }
 
         const combinedDate = new Date(formDate);
@@ -122,10 +123,7 @@ export function CalendarLogForm({
                             <button onClick={onClose} className="text-sm font-medium text-[var(--muted)] hover:text-[var(--foreground)] px-2 py-1">
                                 {t("common.cancel")}
                             </button>
-                            <h2 className="text-lg font-bold text-[var(--foreground)]">{t("calendar.add_log")}</h2>
-                            <button onClick={handleSubmit} className="text-sm font-bold text-[var(--primary)] hover:opacity-80 px-2 py-1">
-                                {t("common.save")}
-                            </button>
+                            <h2 className="text-lg font-bold text-[var(--foreground)]"></h2>
                         </div>
 
                         <div className="overflow-y-auto p-6 space-y-8 pb-12">
@@ -171,14 +169,16 @@ export function CalendarLogForm({
                             <div className="space-y-4">
                                 <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted)] ml-1">{t("calendar.log_type_title")}</h3>
                                 <div className="flex justify-between items-center px-4 bg-slate-500/5 p-6 rounded-[32px] border border-[var(--border)]/30">
-                                    {(['feeding', 'poop', 'cleaning', 'memo'] as const).map((type) => {
+                                    {(['feeding', 'poop', 'cleaning', 'misting', 'memo'] as const).map((type) => {
                                         const Icon = type === 'feeding' ? Utensils :
                                             type === 'poop' ? Droplets :
-                                                type === 'cleaning' ? Sparkles : StickyNote;
+                                                type === 'cleaning' ? Sparkles :
+                                                    type === 'misting' ? SprayCan : StickyNote;
                                         const colors = {
                                             feeding: "rgb(249, 115, 22)",
                                             poop: "rgb(168, 85, 247)",
                                             cleaning: "rgb(34, 197, 94)",
+                                            misting: "rgb(59, 130, 246)",
                                             memo: "rgb(234, 179, 8)"
                                         };
                                         const isSelected = logType === type;
@@ -193,7 +193,14 @@ export function CalendarLogForm({
                                         return (
                                             <div key={type} className="flex flex-col items-center gap-3">
                                                 <button
-                                                    onClick={() => !isDisabled && setLogType(type)}
+                                                    onClick={() => {
+                                                        if (isDisabled) return;
+
+                                                        setLogType(type);
+
+                                                        // Cleaning and Poop now open form for notes (reverted auto-submit)
+                                                        setLogType(type);
+                                                    }}
                                                     disabled={isDisabled}
                                                     className={cn(
                                                         "h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-300",
