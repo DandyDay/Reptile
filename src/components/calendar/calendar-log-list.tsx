@@ -52,9 +52,11 @@ export function CalendarLogList({
                     <div>
                         <div className="flex items-center gap-2">
                             <p className="font-bold text-[var(--foreground)] text-sm tracking-tight">{t(`calendar.${log.type}` as any)}</p>
-                            <span className="text-[10px] text-[var(--muted)] font-mono opacity-60">
-                                {format(new Date(log.date), "HH:mm")}
-                            </span>
+                            {!['feeding', 'poop', 'cleaning'].includes(log.type) && (
+                                <span className="text-[10px] text-[var(--muted)] font-mono opacity-60">
+                                    {format(new Date(log.date), "HH:mm")}
+                                </span>
+                            )}
                             {(() => {
                                 if (!currentReptile?.careSchedules || !selectedDate) return null;
                                 const schedule = currentReptile.careSchedules.find(s =>
@@ -105,7 +107,7 @@ export function CalendarLogList({
                                         }
                                     }
                                 }
-                                if (badgeType) {
+                                if (badgeType && !(badgeType === 'overdue' && log.type === 'cleaning')) {
                                     return (
                                         <div className={cn(
                                             "px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border",
@@ -121,7 +123,7 @@ export function CalendarLogList({
                                 return null;
                             })()}
                         </div>
-                        <p className="text-xs text-[var(--muted)] font-medium mt-0.5">{log.details}</p>
+                        {log.details && <p className="text-xs text-[var(--muted)] font-medium mt-0.5">{log.details}</p>}
                     </div>
                 </div>
                 <button
@@ -182,7 +184,7 @@ export function CalendarLogList({
 
                         <button
                             onClick={onAddLog}
-                            className="fixed bottom-6 right-6 md:absolute md:bottom-0 md:right-0 h-14 w-14 rounded-full bg-[var(--primary)] text-white shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-20"
+                            className="fixed bottom-24 right-6 md:absolute md:bottom-0 md:right-0 h-14 w-14 rounded-full bg-[var(--primary)] text-white shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-20"
                             aria-label={t("calendar.add_log")}
                         >
                             <Plus className="h-6 w-6" />

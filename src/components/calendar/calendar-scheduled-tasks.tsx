@@ -31,6 +31,7 @@ export function CalendarScheduledTasks({
 
         const lastLog = logs
             .filter(l => l.reptileId === currentReptile.id && l.type === schedule.type)
+            .filter(l => new Date(l.date) <= today)
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
         let nextDate = new Date();
@@ -47,20 +48,48 @@ export function CalendarScheduledTasks({
         } else if (schedule.scheduleMode === 'weekly' && schedule.specificDays) {
             const currentDay = today.getDay();
             const targetDays = [...schedule.specificDays].sort((a, b) => a - b);
-            const nextDay = targetDays.find(d => d >= currentDay) ?? targetDays[0];
 
-            let daysToAdd = nextDay - currentDay;
-            if (daysToAdd < 0) daysToAdd += 7;
+            // Check if today is a scheduled day and not yet logged
+            const isTodayScheduled = targetDays.includes(currentDay);
+            const hasLoggedToday = lastLog && isSameDay(new Date(lastLog.date), today);
 
-            // If today is the day, but we already have a log today, move to next week
-            if (daysToAdd === 0 && lastLog && isSameDay(new Date(lastLog.date), today)) {
-                // Move to next occurrence
-                const nextNextDay = targetDays.find(d => d > currentDay) ?? targetDays[0];
-                daysToAdd = nextNextDay - currentDay;
-                if (daysToAdd <= 0) daysToAdd += 7;
+            if (isTodayScheduled && !hasLoggedToday) {
+                // Due Today
+                nextDate = new Date(today);
+            } else {
+                // Find most recent scheduled day in the past (before today)
+                const pastDays = targetDays.filter(d => d < currentDay);
+                const lastScheduledDayOfWeek = pastDays.length > 0
+                    ? pastDays[pastDays.length - 1]
+                    : targetDays[targetDays.length - 1];
+
+                let daysToSubtract = currentDay - lastScheduledDayOfWeek;
+                if (daysToSubtract <= 0) daysToSubtract += 7;
+
+                const prevScheduledDate = new Date(today);
+                prevScheduledDate.setDate(today.getDate() - daysToSubtract);
+
+                // Compare lastLog with prevScheduledDate
+                const lastLogDate = lastLog ? new Date(lastLog.date) : new Date(0);
+                lastLogDate.setHours(0, 0, 0, 0);
+
+                if (lastLogDate < prevScheduledDate) {
+                    // Overdue!
+                    nextDate = prevScheduledDate;
+                } else {
+                    // Not overdue, find the next future scheduled day
+                    const futureDays = targetDays.filter(d => d > currentDay);
+                    const nextScheduledDayOfWeek = futureDays.length > 0
+                        ? futureDays[0]
+                        : targetDays[0];
+
+                    let daysToAdd = nextScheduledDayOfWeek - currentDay;
+                    if (daysToAdd <= 0) daysToAdd += 7;
+
+                    nextDate = new Date(today);
+                    nextDate.setDate(today.getDate() + daysToAdd);
+                }
             }
-
-            nextDate.setDate(today.getDate() + daysToAdd);
         }
 
         const diff = differenceInCalendarDays(nextDate, today);
@@ -96,9 +125,13 @@ export function CalendarScheduledTasks({
                             <div className={cn(
                                 "h-8 w-8 rounded-lg flex items-center justify-center text-lg",
                                 item.type === 'feeding' ? "bg-orange-500/10 text-orange-500" :
-                                    item.type === 'cleaning' ? "bg-green-500/10 text-green-500" : "bg-purple-500/10 text-purple-500"
+                                    item.type === 'cleaning' ? "bg-green-500/10 text-green-500" :
+                                        item.type === 'poop' ? "bg-purple-500/10 text-purple-500" :
+                                            "bg-blue-500/10 text-blue-500"
                             )}>
-                                {item.type === 'feeding' ? '🦗' : item.type === 'cleaning' ? '🧹' : '💩'}
+                                {item.type === 'feeding' ? '🦗' :
+                                    item.type === 'cleaning' ? '🧹' :
+                                        item.type === 'poop' ? '💩' : '📝'}
                             </div>
                             <div>
                                 <p className="text-sm font-bold text-[var(--foreground)]">{t(`calendar.${item.type}` as any)}</p>

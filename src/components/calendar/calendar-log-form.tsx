@@ -23,6 +23,7 @@ interface CalendarLogFormProps {
     t: (key: TranslationKey) => string;
     initialDate: Date;
     initialLogType?: LogType;
+    onToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
 export function CalendarLogForm({
@@ -34,7 +35,8 @@ export function CalendarLogForm({
     foodPresets,
     t,
     initialDate,
-    initialLogType
+    initialLogType,
+    onToast
 }: CalendarLogFormProps) {
     const [logType, setLogType] = useState<LogType>(initialLogType || 'feeding');
     const [details, setDetails] = useState("");
@@ -69,22 +71,20 @@ export function CalendarLogForm({
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        if (checkDate > today && ['feeding', 'poop', 'cleaning'].includes(logType)) {
-            // In a real app we might show a toast, but here we just return for now as per original logic
-            alert(t("calendar.future_log_warning"));
+        if (checkDate > today && logType !== 'memo') {
+            onToast?.(t("calendar.future_log_warning"), 'error');
             return;
         }
 
         let finalDetails = details;
-        if (logType !== 'feeding' && !finalDetails) {
-            if (logType === 'poop') finalDetails = t("calendar.condition_normal");
-            if (logType === 'cleaning') finalDetails = t("calendar.cleaning_spot");
-            if (logType === 'misting') finalDetails = t("calendar.misting");
-        }
 
         const combinedDate = new Date(formDate);
-        const [hours, minutes] = formTime.split(':').map(Number);
-        combinedDate.setHours(hours, minutes);
+        if (['feeding', 'poop', 'cleaning'].includes(logType)) {
+            combinedDate.setHours(0, 0, 0, 0);
+        } else {
+            const [hours, minutes] = formTime.split(':').map(Number);
+            combinedDate.setHours(hours, minutes, 0, 0);
+        }
 
         const logData = {
             type: logType,
@@ -236,7 +236,7 @@ export function CalendarLogForm({
                                         />
                                         <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--primary)] opacity-60" />
                                     </div>
-                                    {logType === 'feeding' && (
+                                    {!['feeding', 'poop', 'cleaning'].includes(logType) && (
                                         <div className="relative w-40 animate-in slide-in-from-right-4 duration-300">
                                             <input
                                                 type="time"

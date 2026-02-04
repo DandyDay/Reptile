@@ -11,6 +11,7 @@ import { CalendarGrid } from "@/components/calendar/calendar-grid";
 import { CalendarLogList } from "@/components/calendar/calendar-log-list";
 import { CalendarLogForm } from "@/components/calendar/calendar-log-form";
 import { CalendarScheduledTasks } from "@/components/calendar/calendar-scheduled-tasks";
+import { Toast } from "@/components/toast";
 
 export function CalendarView() {
     const {
@@ -28,6 +29,17 @@ export function CalendarView() {
     const [initialFormDate, setInitialFormDate] = useState<Date>(new Date());
     const [initialLogType, setInitialLogType] = useState<LogType | undefined>(undefined);
 
+    // Toast State
+    const [toastMessage, setToastMessage] = useState("");
+    const [toastType, setToastType] = useState<'success' | 'error'>('success');
+    const [isToastVisible, setIsToastVisible] = useState(false);
+
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToastMessage(message);
+        setToastType(type);
+        setIsToastVisible(true);
+    };
+
     const locale = visualSettings.language === 'ko' ? ko : enUS;
 
     const dayLogs = useMemo(() => {
@@ -44,8 +56,17 @@ export function CalendarView() {
     };
 
     const handleOpenForm = (date?: Date, type?: LogType) => {
-        setInitialFormDate(date || selectedDate || new Date());
-        setInitialLogType(type);
+        const targetDate = date || selectedDate || new Date();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let targetType = type;
+        if (targetDate > today && !type) {
+            targetType = 'memo';
+        }
+
+        setInitialFormDate(targetDate);
+        setInitialLogType(targetType);
         setIsFormOpen(true);
     };
 
@@ -56,16 +77,25 @@ export function CalendarView() {
                 currentReptile={currentReptile}
                 t={t}
                 onCheckTask={(type) => {
+                    const taskDate = selectedDate || new Date();
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    if (taskDate > today && type !== 'memo') {
+                        showToast(t("calendar.future_log_warning"), 'error');
+                        return;
+                    }
+
                     if (type === 'cleaning' || type === 'poop') {
+                        const finalDate = new Date(taskDate);
+                        finalDate.setHours(0, 0, 0, 0);
                         addLog({
                             type: type,
-                            date: new Date().toISOString(),
-                            details: type === 'cleaning'
-                                ? t("calendar.cleaning_spot")
-                                : t("calendar.condition_normal"),
+                            date: finalDate.toISOString(),
+                            details: "",
                         });
                     } else {
-                        handleOpenForm(new Date(), type);
+                        handleOpenForm(taskDate, type);
                     }
                 }}
             />
@@ -103,22 +133,30 @@ export function CalendarView() {
                     locale={locale}
                     onAddLog={() => handleOpenForm()}
                     onQuickAdd={(type) => {
-                        if (type === 'misting') {
-                            addLog({
-                                type: 'misting',
-                                date: new Date().toISOString(),
-                                // No details needed or maybe empty string, keeping it clean
-                            });
-                        } else {
-                            addLog({
-                                type: type,
-                                date: new Date().toISOString(),
-                                details: type === 'cleaning'
-                                    ? t("calendar.cleaning_spot")
-                                    : t("calendar.condition_normal"),
-                                note: ''
-                            });
+                        const baseDate = selectedDate || new Date();
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (baseDate > today && type !== 'memo') {
+                            showToast(t("calendar.future_log_warning"), 'error');
+                            return;
                         }
+
+                        const finalDate = new Date(baseDate);
+
+                        if (['feeding', 'poop', 'cleaning'].includes(type)) {
+                            finalDate.setHours(0, 0, 0, 0);
+                        } else if (isSameDay(baseDate, new Date())) {
+                            const now = new Date();
+                            finalDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+                        }
+
+                        addLog({
+                            type,
+                            date: finalDate.toISOString(),
+                            details: "",
+                            note: ""
+                        });
                     }}
                     allLogs={logs}
                 />
@@ -134,6 +172,14 @@ export function CalendarView() {
                 t={t}
                 initialDate={initialFormDate}
                 initialLogType={initialLogType}
+                onToast={showToast}
+            />
+
+            <Toast
+                message={toastMessage}
+                isVisible={isToastVisible}
+                type={toastType}
+                onClose={() => setIsToastVisible(false)}
             />
         </div>
     );

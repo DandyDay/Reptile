@@ -7,7 +7,7 @@ import { supabase } from "./supabase";
 export type LogType = "feeding" | "poop" | "cleaning" | "memo" | "weight" | "misting";
 
 export interface CareSchedule {
-    type: "feeding" | "cleaning";
+    type: "feeding" | "cleaning" | "poop";
     scheduleMode: "interval" | "weekly";
     frequencyDays?: number;
     specificDays?: number[]; // 0 for Sunday, 1 for Monday, etc.
