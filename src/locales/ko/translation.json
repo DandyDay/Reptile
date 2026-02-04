@@ -80,7 +80,9 @@
         "overdue_tasks": "지연된 관리",
         "overdue_badge": "지연됨",
         "task_done": "완료됨",
-        "future_log_warning": "미래 날짜에는 기록할 수 없습니다."
+        "future_log_warning": "미래 날짜에는 기록할 수 없습니다.",
+        "overdue_by": "{{days}}일 연체됨",
+        "due_today": "오늘 예정"
     },
     "dashboard": {
         "title": "대시보드",

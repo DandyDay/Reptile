@@ -5,10 +5,12 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Log, Reptile, LogType } from "@/lib/store";
 
+import { TranslationKey } from "@/lib/i18n";
+
 interface CalendarScheduledTasksProps {
     logs: Log[];
     currentReptile: Reptile | null;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
     onCheckTask: (type: LogType) => void;
 }
 

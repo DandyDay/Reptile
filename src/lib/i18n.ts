@@ -5,12 +5,16 @@ import en from "@/locales/en/translation.json";
 import ko from "@/locales/ko/translation.json";
 
 // Type-safe recursive key access
-type Translations = typeof en;
-type NestedKeyOf<ObjectType extends object> = {
+// Type-safe recursive key access
+export type Translations = typeof en;
+export type NestedKeyOf<ObjectType extends object> = {
     [Key in keyof ObjectType & (string | number)]: ObjectType[Key] extends object
     ? `${Key}.${NestedKeyOf<ObjectType[Key]>}`
     : `${Key}`
 }[keyof ObjectType & (string | number)];
+
+export type TranslationKey = NestedKeyOf<Translations>;
+
 
 export function useTranslation() {
     const { visualSettings } = useReptileLogs();

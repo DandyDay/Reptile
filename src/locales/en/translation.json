@@ -80,7 +80,9 @@
         "overdue_tasks": "Overdue Care",
         "overdue_badge": "Overdue",
         "task_done": "Done",
-        "future_log_warning": "Cannot log care tasks for future dates."
+        "future_log_warning": "Cannot log care tasks for future dates.",
+        "overdue_by": "Overdue by {{days}} days",
+        "due_today": "Due Today"
     },
     "dashboard": {
         "title": "Dashboard",
