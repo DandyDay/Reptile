@@ -199,6 +199,15 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
             setSession(session);
+            // Handle Logout: Reset to system theme if user logs out
+            if (!session && _event === 'SIGNED_OUT') {
+                const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                setVisualSettings(prev => ({
+                    ...prev,
+                    theme: isDark ? 'dark' : 'light'
+                }));
+                localStorage.removeItem("reptile-visual-settings-v1"); // Optional: clear entirely or just update
+            }
         });
 
         return () => subscription.unsubscribe();
@@ -312,6 +321,14 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                                 ...prev.customColors,
                                 ...(profileData as any).custom_theme
                             }
+                        }));
+                    } else {
+                        // If user does NOT use custom theme, revert to system/default
+                        // This prevents previous user's custom theme from persisting
+                        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                        setVisualSettings(prev => ({
+                            ...prev,
+                            theme: isDark ? 'dark' : 'light'
                         }));
                     }
                 }
@@ -733,9 +750,6 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
 
     // System theme detection - follow device preference for dark/light mode
     useEffect(() => {
-        // Only apply system theme if not using custom theme
-        if (visualSettings.theme === 'custom') return;
-
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
         const handleThemeChange = (e: MediaQueryListEvent | MediaQueryList) => {
@@ -747,8 +761,10 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             });
         };
 
-        // Set initial theme based on system preference
-        handleThemeChange(mediaQuery);
+        // Note: We removed the immediate call `handleThemeChange(mediaQuery)`
+        // because it would overwrite any manual setting loaded from localStorage
+        // or set by the user if the system preference differs.
+        // We only listen for *changes* in system preference now.
 
         // Listen for changes
         mediaQuery.addEventListener('change', handleThemeChange);
@@ -756,7 +772,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         return () => {
             mediaQuery.removeEventListener('change', handleThemeChange);
         };
-    }, [visualSettings.theme]);
+    }, []);
 
     const setCalViewMode = (mode: "dot" | "emoji") => {
         const newSettings = { ...visualSettings, calViewMode: mode };

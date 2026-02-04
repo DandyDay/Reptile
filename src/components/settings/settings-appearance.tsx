@@ -35,7 +35,7 @@ export function SettingsAppearance({
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <Card className="p-4 border-[var(--border)] divide-y divide-[var(--border)]">
-                <div className="space-y-2 pb-6">
+                <div className="pb-6 space-y-6">
                     {/* Theme Selector */}
                     <div>
                         <div className="flex items-center gap-3 mb-4">
@@ -59,6 +59,44 @@ export function SettingsAppearance({
                         </div>
                     </div>
 
+                    {/* Custom Theme Editor */}
+                    {visualSettings?.theme === 'custom' && (
+                        <div className="space-y-6">
+                            <div className="flex gap-2">
+                                <Button variant="secondary" size="sm" onClick={onPublishTheme} className="flex-1 gap-2">
+                                    <Store className="h-4 w-4" />
+                                    {t("settings.publish_theme")}
+                                </Button>
+                                <Button variant="secondary" size="sm" onClick={() => setShowCustomColors(!showCustomColors)} className="flex-1 gap-2 border border-[var(--border)]">
+                                    <Palette className="h-4 w-4" />
+                                    {showCustomColors ? t("settings.hide_colors") : t("settings.edit_colors")}
+                                    <ChevronRight className={cn("h-4 w-4 transition-transform", showCustomColors && "rotate-90")} />
+                                </Button>
+                            </div>
+
+                            {showCustomColors && (
+                                <div className="grid grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-200">
+                                    {Object.entries(visualSettings.customColors).map(([key, value]) => (
+                                        <div key={key} className="space-y-1.5 p-2 rounded-lg bg-slate-500/5 border border-[var(--border)] transition-colors hover:border-[var(--primary)]/30">
+                                            <label className="text-[10px] text-[var(--muted)] font-bold uppercase tracking-wider block truncate">{t(`settings.colors.${key}` as any)}</label>
+                                            <div className="flex items-center gap-2">
+                                                <div className="relative h-7 w-10 rounded border border-[var(--border)] overflow-hidden">
+                                                    <input
+                                                        type="color"
+                                                        value={value}
+                                                        onChange={(e) => setCustomColor(key, e.target.value)}
+                                                        className="absolute -inset-1 h-10 w-14 cursor-pointer"
+                                                    />
+                                                </div>
+                                                <span className="text-[9px] font-mono text-[var(--muted)]">{value.toUpperCase()}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Theme Store Link */}
                     <button
                         onClick={() => setView("theme_store")}
@@ -76,46 +114,6 @@ export function SettingsAppearance({
                         <ChevronRight className="h-5 w-5 text-[var(--muted)] group-hover:text-[var(--foreground)] transition-colors" />
                     </button>
                 </div>
-
-                {/* Custom Theme Editor */}
-                {visualSettings?.theme === 'custom' && (
-                    <div className="py-6 space-y-6">
-
-
-                        <div className="flex gap-2">
-                            <Button variant="secondary" size="sm" onClick={onPublishTheme} className="flex-1 gap-2">
-                                <Store className="h-4 w-4" />
-                                {t("settings.publish_theme")}
-                            </Button>
-                            <Button variant="secondary" size="sm" onClick={() => setShowCustomColors(!showCustomColors)} className="flex-1 gap-2 border border-[var(--border)]">
-                                <Palette className="h-4 w-4" />
-                                {showCustomColors ? t("settings.hide_colors") : t("settings.edit_colors")}
-                                <ChevronRight className={cn("h-4 w-4 transition-transform", showCustomColors && "rotate-90")} />
-                            </Button>
-                        </div>
-
-                        {showCustomColors && (
-                            <div className="grid grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-200">
-                                {Object.entries(visualSettings.customColors).map(([key, value]) => (
-                                    <div key={key} className="space-y-1.5 p-2 rounded-lg bg-slate-500/5 border border-[var(--border)] transition-colors hover:border-[var(--primary)]/30">
-                                        <label className="text-[10px] text-[var(--muted)] font-bold uppercase tracking-wider block truncate">{t(`settings.colors.${key}` as any)}</label>
-                                        <div className="flex items-center gap-2">
-                                            <div className="relative h-7 w-10 rounded border border-[var(--border)] overflow-hidden">
-                                                <input
-                                                    type="color"
-                                                    value={value}
-                                                    onChange={(e) => setCustomColor(key, e.target.value)}
-                                                    className="absolute -inset-1 h-10 w-14 cursor-pointer"
-                                                />
-                                            </div>
-                                            <span className="text-[9px] font-mono text-[var(--muted)]">{value.toUpperCase()}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
 
                 {/* Language Selector */}
                 <div className="py-6">
