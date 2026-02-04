@@ -21,6 +21,7 @@
     "calendar": {
         "title": "달력",
         "no_records": "기록이 없습니다.",
+        "no_logs": "기록이 없습니다.",
         "add_log": "기록 추가",
         "log_type_title": "기록 종류",
         "reptile_title": "파충류",

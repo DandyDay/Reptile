@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Log, Reptile } from "@/lib/store";
 import { getLogIcon } from "./utils";
 
+import { TranslationKey } from "@/lib/i18n";
+
 interface CalendarLogListProps {
     selectedDate: Date | null;
     dayLogs: Log[];
     onDeleteLog: (id: string) => void;
     currentReptile: Reptile | null;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
     lang: 'ko' | 'en';
     locale: any;
     onAddLog: () => void;

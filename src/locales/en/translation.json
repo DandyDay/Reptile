@@ -21,6 +21,7 @@
     "calendar": {
         "title": "Calendar",
         "no_records": "No records for this day.",
+        "no_logs": "No logs.",
         "add_log": "Add Log",
         "log_type_title": "Record Type",
         "reptile_title": "Reptile",

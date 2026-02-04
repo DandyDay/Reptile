@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LogType, Reptile, FoodPreset } from "@/lib/store";
 
+import { TranslationKey } from "@/lib/i18n";
+
 interface CalendarLogFormProps {
     isOpen: boolean;
     onClose: () => void;
@@ -18,7 +20,7 @@ interface CalendarLogFormProps {
     reptiles: Reptile[];
     currentReptile: Reptile | null;
     foodPresets: FoodPreset[];
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
     initialDate: Date;
     initialLogType?: LogType;
 }

@@ -5,12 +5,14 @@ import { format, addMonths, subMonths } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+import { TranslationKey } from "@/lib/i18n";
+
 interface CalendarHeaderProps {
     currentMonth: Date;
     setCurrentMonth: (date: Date) => void;
     isPickerOpen: boolean;
     setIsPickerOpen: (open: boolean) => void;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
     lang: 'ko' | 'en';
     locale: any;
 }

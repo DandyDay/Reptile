@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 import { Log, Reptile, VisualSettings } from "@/lib/store";
 import { getLogIcon } from "./utils";
 
+import { TranslationKey } from "@/lib/i18n";
+
 interface CalendarGridProps {
     currentMonth: Date;
     selectedDate: Date | null;
@@ -21,7 +23,7 @@ interface CalendarGridProps {
     logs: Log[];
     currentReptile: Reptile | null;
     visualSettings: VisualSettings;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
 }
 
 export function CalendarGrid({
