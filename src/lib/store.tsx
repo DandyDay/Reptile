@@ -49,6 +49,31 @@ export interface LogEntry {
     weight?: number; // Numeric weight value for graphing
 }
 
+export type Log = LogEntry;
+
+export interface VisualSettings {
+    calViewMode: "dot" | "emoji";
+    language: "ko" | "en";
+    theme: "dark" | "light" | "custom";
+    customColors: {
+        background: string;
+        card: string;
+        primary: string;
+        secondary: string;
+        accent: string;
+        text: string;
+        border: string;
+        muted: string;
+        feeding: string;
+        poop: string;
+        cleaning: string;
+        memo: string;
+        success: string;
+        danger: string;
+        weight: string;
+    };
+}
+
 interface ReptileContextType {
     logs: LogEntry[];
     allLogs: LogEntry[];
@@ -62,28 +87,7 @@ interface ReptileContextType {
     addLog: (entry: Omit<LogEntry, "id" | "reptileId"> & { reptileId?: string }) => void;
     deleteLog: (id: string) => void;
     isLoaded: boolean;
-    visualSettings: {
-        calViewMode: "dot" | "emoji";
-        language: "ko" | "en";
-        theme: "dark" | "light" | "custom";
-        customColors: {
-            background: string;
-            card: string;
-            primary: string;
-            secondary: string;
-            accent: string;
-            text: string;
-            border: string;
-            muted: string;
-            feeding: string;
-            poop: string;
-            cleaning: string;
-            memo: string;
-            success: string;
-            danger: string;
-            weight: string;
-        }
-    };
+    visualSettings: VisualSettings;
     setCalViewMode: (mode: "dot" | "emoji") => void;
     setLanguage: (lang: "ko" | "en") => void;
     setTheme: (theme: "dark" | "light" | "custom") => void;
