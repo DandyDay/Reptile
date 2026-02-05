@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { LogType, Reptile, FoodPreset } from "@/lib/store";
+import { LogType, Reptile, FoodPreset, Log } from "@/lib/store";
 
 import { TranslationKey } from "@/lib/i18n";
 
@@ -24,6 +24,7 @@ interface CalendarLogFormProps {
     initialDate: Date;
     initialLogType?: LogType;
     onToast?: (message: string, type?: 'success' | 'error') => void;
+    editingLog?: Log | null;
 }
 
 export function CalendarLogForm({
@@ -36,7 +37,8 @@ export function CalendarLogForm({
     t,
     initialDate,
     initialLogType,
-    onToast
+    onToast,
+    editingLog
 }: CalendarLogFormProps) {
     const [logType, setLogType] = useState<LogType>(initialLogType || 'feeding');
     const [details, setDetails] = useState("");
@@ -47,23 +49,33 @@ export function CalendarLogForm({
     const [formDate, setFormDate] = useState<Date>(initialDate);
     const [formTime, setFormTime] = useState(format(new Date(), "HH:mm"));
     const [selectedReptileId, setSelectedReptileId] = useState<string>("");
-    const [feedingWeight, setFeedingWeight] = useState("");
+    const [weight, setWeight] = useState("");
 
     // Reset form when opened
     useEffect(() => {
         if (isOpen) {
-            setFormDate(initialDate);
-            setFormTime(format(new Date(), "HH:mm"));
-            setSelectedReptileId(currentReptile?.id || (reptiles.length > 0 ? reptiles[0].id : ""));
-            setLogType(initialLogType || 'feeding');
-            setDetails("");
-            setNote("");
-            setSelectedPreset(null);
-            setQuantity("5");
-            setSelectedEmoji(null);
-            setFeedingWeight("");
+            if (editingLog) {
+                const date = new Date(editingLog.date);
+                setDetails(editingLog.details || "");
+                setNote(editingLog.note || "");
+                setSelectedEmoji(editingLog.emoji || null);
+                setWeight(editingLog.weight?.toString() || "");
+                setSelectedPreset(null);
+                setQuantity("5");
+            } else {
+                setFormDate(initialDate);
+                setFormTime(format(new Date(), "HH:mm"));
+                setSelectedReptileId(currentReptile?.id || (reptiles.length > 0 ? reptiles[0].id : ""));
+                setLogType(initialLogType || 'feeding');
+                setDetails("");
+                setNote("");
+                setSelectedPreset(null);
+                setQuantity("5");
+                setSelectedEmoji(null);
+                setWeight("");
+            }
         }
-    }, [isOpen, initialDate, currentReptile, reptiles, initialLogType]);
+    }, [isOpen, initialDate, currentReptile, reptiles, initialLogType, editingLog]);
 
     const handleSubmit = () => {
         const checkDate = new Date(formDate);
@@ -85,15 +97,15 @@ export function CalendarLogForm({
             const [hours, minutes] = formTime.split(':').map(Number);
             combinedDate.setHours(hours, minutes, 0, 0);
         }
-
         const logData = {
+            id: editingLog?.id,
             type: logType,
             date: combinedDate.toISOString(),
             details: finalDetails,
             note: note,
             emoji: selectedEmoji || undefined,
             reptileId: selectedReptileId,
-            feedingWeight: feedingWeight ? parseFloat(feedingWeight) : undefined
+            weight: weight ? parseFloat(weight) : undefined
         };
 
         onSubmit(logData);
@@ -123,7 +135,8 @@ export function CalendarLogForm({
                             <button onClick={onClose} className="text-sm font-medium text-[var(--muted)] hover:text-[var(--foreground)] px-2 py-1">
                                 {t("common.cancel")}
                             </button>
-                            <h2 className="text-lg font-bold text-[var(--foreground)]"></h2>
+                            <h2 className="text-lg font-bold text-[var(--foreground)]">
+                            </h2>
                         </div>
 
                         <div className="overflow-y-auto p-6 space-y-8 pb-12">
@@ -335,9 +348,9 @@ export function CalendarLogForm({
                                                 <div className="flex items-center gap-1">
                                                     <button
                                                         onClick={() => {
-                                                            const current = feedingWeight ? parseFloat(feedingWeight) : 0;
+                                                            const current = weight ? parseFloat(weight) : 0;
                                                             const newQty = Math.max(0, current - 1).toString();
-                                                            setFeedingWeight(newQty === "0" ? "" : newQty);
+                                                            setWeight(newQty === "0" ? "" : newQty);
                                                         }}
                                                         className="h-12 w-12 rounded-2xl bg-[var(--background)] flex items-center justify-center text-xl font-black text-[var(--foreground)] shadow-sm active:scale-90 transition-transform"
                                                     >
@@ -346,15 +359,15 @@ export function CalendarLogForm({
                                                     <input
                                                         type="number"
                                                         step="0.1"
-                                                        value={feedingWeight}
-                                                        onChange={(e) => setFeedingWeight(e.target.value)}
+                                                        value={weight}
+                                                        onChange={(e) => setWeight(e.target.value)}
                                                         placeholder="0"
                                                         className="w-20 bg-transparent text-center text-xl font-black text-[var(--foreground)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none placeholder:text-[var(--muted)]/30"
                                                     />
                                                     <button
                                                         onClick={() => {
-                                                            const current = feedingWeight ? parseFloat(feedingWeight) : 0;
-                                                            setFeedingWeight((current + 1).toString());
+                                                            const current = weight ? parseFloat(weight) : 0;
+                                                            setWeight((current + 1).toString());
                                                         }}
                                                         className="h-12 w-12 rounded-2xl bg-[var(--background)] flex items-center justify-center text-xl font-black text-[var(--foreground)] shadow-sm active:scale-90 transition-transform"
                                                     >

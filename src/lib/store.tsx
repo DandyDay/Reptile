@@ -85,6 +85,7 @@ interface ReptileContextType {
     deleteReptile: (id: string) => void;
     currentReptile: Reptile;
     addLog: (entry: Omit<LogEntry, "id" | "reptileId"> & { reptileId?: string }) => void;
+    updateLog: (id: string, entry: Partial<Omit<LogEntry, "id" | "reptileId">>) => void;
     deleteLog: (id: string) => void;
     isLoaded: boolean;
     visualSettings: VisualSettings;
@@ -638,6 +639,36 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const updateLog = async (id: string, updatedFields: Partial<Omit<LogEntry, "id" | "reptileId">>) => {
+        const previousLogs = logs;
+
+        // Optimistic update
+        setLogs(prev => {
+            const updated = prev.map(l => l.id === id ? { ...l, ...updatedFields } : l);
+            if (!session) {
+                const localData = loadLocalData();
+                saveLocalData({ ...localData, logs: updated });
+            }
+            return updated;
+        });
+
+        if (!session) return;
+
+        const { error } = await supabase.from('logs').update({
+            type: updatedFields.type,
+            date: updatedFields.date,
+            note: updatedFields.note,
+            details: updatedFields.details,
+            emoji: updatedFields.emoji,
+            weight: updatedFields.weight
+        }).eq('id', id);
+
+        if (error) {
+            console.error("Failed to update log", error);
+            setLogs(previousLogs); // Revert on error
+        }
+    };
+
     const deleteLog = async (id: string) => {
         const previousLogs = logs;
 
@@ -970,6 +1001,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         deleteReptile,
         currentReptile,
         addLog,
+        updateLog,
         deleteLog,
         isLoaded,
         visualSettings,

@@ -15,6 +15,7 @@ interface CalendarHeaderProps {
     t: (key: TranslationKey) => string;
     lang: 'ko' | 'en';
     locale: any;
+    onToday: () => void;
 }
 
 export function CalendarHeader({
@@ -24,7 +25,8 @@ export function CalendarHeader({
     setIsPickerOpen,
     t,
     lang,
-    locale
+    locale,
+    onToday
 }: CalendarHeaderProps) {
     return (
         <>
@@ -57,12 +59,20 @@ export function CalendarHeader({
                     </h2>
                 </div>
 
-                <button
-                    onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                    className="h-10 w-10 flex items-center justify-center rounded-2xl bg-slate-500/5 border border-[var(--border)]/30 text-[var(--muted)] hover:text-[var(--primary)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition-all active:scale-90 z-10"
-                >
-                    <ChevronRight className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-2 z-10">
+                    <button
+                        onClick={onToday}
+                        className="h-10 px-4 flex items-center justify-center rounded-2xl bg-slate-500/5 border border-[var(--border)]/30 text-[var(--muted)] hover:text-[var(--primary)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition-all active:scale-90 text-[10px] font-black uppercase tracking-wider"
+                    >
+                        {lang === 'ko' ? '오늘' : 'Today'}
+                    </button>
+                    <button
+                        onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                        className="h-10 w-10 flex items-center justify-center rounded-2xl bg-slate-500/5 border border-[var(--border)]/30 text-[var(--muted)] hover:text-[var(--primary)] hover:border-[var(--primary)]/30 hover:bg-[var(--primary)]/5 transition-all active:scale-90"
+                    >
+                        <ChevronRight className="h-5 w-5" />
+                    </button>
+                </div>
             </div>
 
             <AnimatePresence>

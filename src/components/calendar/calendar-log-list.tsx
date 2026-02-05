@@ -2,7 +2,7 @@
 
 import { format, differenceInCalendarDays, isSameDay } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Plus, Check } from "lucide-react";
+import { Trash2, Plus, Check, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Log, Reptile, LogType } from "@/lib/store";
@@ -21,6 +21,7 @@ interface CalendarLogListProps {
     locale: any;
     onAddLog: () => void;
     onQuickAdd: (type: LogType) => void;
+    onEditLog: (log: Log) => void;
     allLogs: Log[]; // Needed for calculating overdue/scheduled status which looks back in history
 }
 
@@ -34,112 +35,129 @@ export function CalendarLogList({
     locale,
     onAddLog,
     onQuickAdd,
+    onEditLog,
     allLogs
 }: CalendarLogListProps) {
     const renderLogItem = (log: Log) => (
-        <div key={log.id} className="group flex flex-col gap-2 rounded-2xl bg-slate-500/5 p-4 border border-[var(--border)] transition-all hover:border-[var(--primary)]/30">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div
-                        className="flex h-12 w-12 items-center justify-center rounded-2xl text-2xl shadow-sm"
-                        style={{
-                            backgroundColor: `color-mix(in srgb, var(--color-${log.type}), transparent 85%)`,
-                            color: `var(--color-${log.type})`
-                        }}
-                    >
-                        {getLogIcon(log)}
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <p className="font-bold text-[var(--foreground)] text-sm tracking-tight">{t(`calendar.${log.type}` as any)}</p>
-                            {!['feeding', 'poop', 'cleaning'].includes(log.type) && (
-                                <span className="text-[10px] text-[var(--muted)] font-mono opacity-60">
-                                    {format(new Date(log.date), "HH:mm")}
-                                </span>
-                            )}
-                            {(() => {
-                                if (!currentReptile?.careSchedules || !selectedDate) return null;
-                                const schedule = currentReptile.careSchedules.find(s =>
-                                    s.enabled &&
-                                    s.type === log.type
-                                );
+        <div key={log.id} className="group relative rounded-2xl bg-slate-500/5 border border-[var(--border)] transition-all hover:border-[var(--primary)]/30">
+            <div className="p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm"
+                            style={{
+                                backgroundColor: `color-mix(in srgb, var(--color-${log.type}), transparent 85%)`,
+                                color: `var(--color-${log.type})`
+                            }}
+                        >
+                            {getLogIcon(log)}
+                        </div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-bold text-[var(--foreground)] text-sm tracking-tight truncate">{t(`calendar.${log.type}` as any)}</p>
+                                {!['feeding', 'poop', 'cleaning'].includes(log.type) && (
+                                    <span className="text-[10px] text-[var(--muted)] font-mono opacity-60 shrink-0">
+                                        {format(new Date(log.date), "HH:mm")}
+                                    </span>
+                                )}
+                                {(() => {
+                                    if (!currentReptile?.careSchedules || !selectedDate) return null;
+                                    const schedule = currentReptile.careSchedules.find(s =>
+                                        s.enabled &&
+                                        s.type === log.type
+                                    );
 
-                                // Determine if this log was scheduled or overdue
-                                let badgeType: 'scheduled' | 'overdue' | null = null;
+                                    // Determine if this log was scheduled or overdue
+                                    let badgeType: 'scheduled' | 'overdue' | null = null;
 
-                                if (schedule) {
-                                    const todayStart = new Date(selectedDate);
-                                    todayStart.setHours(0, 0, 0, 0);
+                                    if (schedule) {
+                                        const todayStart = new Date(selectedDate);
+                                        todayStart.setHours(0, 0, 0, 0);
 
-                                    // Complex logic for scheduling... reusing from original
-                                    const lastLogBeforeThis = allLogs
-                                        .filter(l => l.reptileId === currentReptile.id && l.type === log.type && l.id !== log.id)
-                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                        .find(l => new Date(l.date) < todayStart);
+                                        // Complex logic for scheduling... reusing from original
+                                        const lastLogBeforeThis = allLogs
+                                            .filter(l => l.reptileId === currentReptile.id && l.type === log.type && l.id !== log.id)
+                                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                            .find(l => new Date(l.date) < todayStart);
 
-                                    if (schedule.scheduleMode === 'weekly') {
-                                        if (schedule.specificDays?.includes(selectedDate.getDay())) {
-                                            badgeType = 'scheduled';
-                                        } else {
-                                            // Check if it was overdue
-                                            const targetDays = [...(schedule.specificDays || [])].sort((a, b) => b - a);
-                                            const currentDay = selectedDate.getDay();
-                                            let lastScheduledDay = targetDays.find(d => d < currentDay);
-                                            if (lastScheduledDay === undefined) lastScheduledDay = targetDays[0];
-                                            const daysToSub = (currentDay - lastScheduledDay + 7) % 7 || 7;
-                                            const lastScheduledDate = new Date(todayStart);
-                                            lastScheduledDate.setDate(todayStart.getDate() - daysToSub);
-                                            const lastLogDate = lastLogBeforeThis ? new Date(lastLogBeforeThis.date) : null;
-                                            if (!lastLogDate || (lastLogDate < lastScheduledDate && !isSameDay(lastLogDate, lastScheduledDate))) {
-                                                badgeType = 'overdue';
-                                            }
-                                        }
-                                    } else if (schedule.scheduleMode === 'interval' && schedule.frequencyDays) {
-                                        if (lastLogBeforeThis) {
-                                            const diff = differenceInCalendarDays(selectedDate, new Date(lastLogBeforeThis.date));
-                                            if (diff > 0 && diff % schedule.frequencyDays === 0) {
+                                        if (schedule.scheduleMode === 'weekly') {
+                                            if (schedule.specificDays?.includes(selectedDate.getDay())) {
                                                 badgeType = 'scheduled';
-                                            } else if (diff > schedule.frequencyDays) {
-                                                badgeType = 'overdue';
+                                            } else {
+                                                // Check if it was overdue
+                                                const targetDays = [...(schedule.specificDays || [])].sort((a, b) => b - a);
+                                                const currentDay = selectedDate.getDay();
+                                                let lastScheduledDay = targetDays.find(d => d < currentDay);
+                                                if (lastScheduledDay === undefined) lastScheduledDay = targetDays[0];
+                                                const daysToSub = (currentDay - lastScheduledDay + 7) % 7 || 7;
+                                                const lastScheduledDate = new Date(todayStart);
+                                                lastScheduledDate.setDate(todayStart.getDate() - daysToSub);
+                                                const lastLogDate = lastLogBeforeThis ? new Date(lastLogBeforeThis.date) : null;
+                                                if (!lastLogDate || (lastLogDate < lastScheduledDate && !isSameDay(lastLogDate, lastScheduledDate))) {
+                                                    badgeType = 'overdue';
+                                                }
                                             }
-                                        } else {
-                                            badgeType = 'scheduled';
+                                        } else if (schedule.scheduleMode === 'interval' && schedule.frequencyDays) {
+                                            if (lastLogBeforeThis) {
+                                                const diff = differenceInCalendarDays(selectedDate, new Date(lastLogBeforeThis.date));
+                                                if (diff > 0 && diff % schedule.frequencyDays === 0) {
+                                                    badgeType = 'scheduled';
+                                                } else if (diff > schedule.frequencyDays) {
+                                                    badgeType = 'overdue';
+                                                }
+                                            } else {
+                                                badgeType = 'scheduled';
+                                            }
                                         }
                                     }
-                                }
-                                if (badgeType && !(badgeType === 'overdue' && log.type === 'cleaning')) {
-                                    return (
-                                        <div className={cn(
-                                            "px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border",
-                                            badgeType === 'overdue'
-                                                ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                                : "bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20"
-                                        )}
-                                        >
-                                            {badgeType === 'overdue' ? t("calendar.overdue_badge") : t("calendar.scheduled_tasks")}
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })()}
+                                    if (badgeType && !(badgeType === 'overdue' && log.type === 'cleaning')) {
+                                        return (
+                                            <div className={cn(
+                                                "px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shrink-0",
+                                                badgeType === 'overdue'
+                                                    ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                                    : "bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20"
+                                            )}
+                                            >
+                                                {badgeType === 'overdue' ? t("calendar.overdue_badge") : t("calendar.scheduled_tasks")}
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+                            </div>
+                            {log.details && <p className="text-xs text-[var(--muted)] font-medium mt-0.5 truncate">{log.details}</p>}
                         </div>
-                        {log.details && <p className="text-xs text-[var(--muted)] font-medium mt-0.5">{log.details}</p>}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEditLog(log);
+                            }}
+                            className="p-2 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-xl transition-all active:scale-90"
+                            title={t("common.edit" as any)}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteLog(log.id);
+                            }}
+                            className="p-2 text-[var(--muted)] hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all active:scale-90"
+                            title={t("common.delete" as any)}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
-                <button
-                    onClick={() => onDeleteLog(log.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-all p-2 text-[var(--muted)] hover:text-red-500 hover:bg-red-500/10 rounded-xl"
-                >
-                    <Trash2 className="h-4 w-4" />
-                </button>
-            </div>
-            {
-                log.note && (
+                {log.note && (
                     <div className="ml-16 bg-white/5 p-3 rounded-xl text-[11px] text-[var(--muted)] italic border border-[var(--border)]/50 leading-relaxed shadow-inner">
                         "{log.note}"
                     </div>
-                )
-            }
+                )}
+            </div>
         </div>
     );
 
