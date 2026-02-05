@@ -142,6 +142,11 @@ export function CalendarView() {
                             return;
                         }
 
+                        if (type === 'misting') {
+                            handleOpenForm(baseDate, 'misting');
+                            return;
+                        }
+
                         const finalDate = new Date(baseDate);
 
                         if (['feeding', 'poop', 'cleaning'].includes(type)) {

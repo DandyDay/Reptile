@@ -168,9 +168,39 @@ function SettingsContent() {
             }
         } catch (err) {
             console.error('Error saving profile:', err);
-            alert("프로필 저장 중 오류가 발생했습니다.");
+            setToastState({
+                isOpen: true,
+                message: "프로필 저장 중 오류가 발생했습니다."
+            });
         }
         setIsSavingProfile(false);
+        if (view === "profile") {
+            setToastState({
+                isOpen: true,
+                message: t("common.save_success")
+            });
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!session?.user) return;
+        try {
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .delete()
+                .eq('id', session.user.id);
+
+            if (profileError) throw profileError;
+
+            await supabase.auth.signOut();
+            router.push('/');
+        } catch (error) {
+            console.error("Error deleting account:", error);
+            setToastState({
+                isOpen: true,
+                message: "계정 삭제 중 오류가 발생했습니다."
+            });
+        }
     };
 
     const handleFormSubmit = (data: any) => {
@@ -347,6 +377,7 @@ function SettingsContent() {
                             onProfileImageChange={handleProfileImageChange}
                             fileInputRef={profileFileInputRef}
                             session={session}
+                            onDeleteAccount={handleDeleteAccount}
                         />
                     )}
 

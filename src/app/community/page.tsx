@@ -6,7 +6,7 @@ import { useReptileLogs } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import {
     MessageSquare, X, Image as ImageIcon,
-    LogIn, LogOut, Loader2, Tag, Turtle
+    LogIn, Loader2, Tag, Turtle
 } from "lucide-react";
 import { AuthDialog } from "@/components/auth-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -336,9 +336,6 @@ export default function CommunityPage() {
         setPostToDelete(null);
     };
 
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-    };
 
     const promptEdit = (postId: string) => {
         const post = posts.find(p => p.id === postId);
@@ -500,11 +497,7 @@ export default function CommunityPage() {
                     <h1 className="text-lg font-black tracking-tight">{t("nav.community")}</h1>
 
                     <div className="flex items-center gap-2">
-                        {session ? (
-                            <button onClick={handleLogout} className="p-2 rounded-full hover:bg-[var(--secondary)] transition-colors text-[var(--muted)]">
-                                <LogOut className="h-5 w-5" />
-                            </button>
-                        ) : (
+                        {!session && (
                             <button onClick={() => setShowAuthDialog(true)} className="flex items-center gap-1 bg-[var(--primary)] text-white px-3 py-1.5 rounded-full text-xs font-bold">
                                 <LogIn className="h-3 w-3" />
                                 <span>Login</span>
