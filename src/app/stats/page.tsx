@@ -46,7 +46,6 @@ export default function StatsPage() {
                 <p className="mt-2 text-xl font-bold text-[var(--foreground)]">
                     {log ? formatDistanceToNow(new Date(log.date), { addSuffix: true, locale }) : t("common.no_record")}
                 </p>
-                {log && <p className="text-xs text-[var(--muted)] mt-1">{log.details}</p>}
             </Card>
         </div>
     );

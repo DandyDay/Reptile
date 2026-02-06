@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Activity, Settings, Users } from "lucide-react";
+import { Calendar, LayoutDashboard, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ export function BottomNav() {
 
     const links = [
         { href: "/", label: t("nav.calendar"), icon: Calendar },
-        { href: "/stats", label: t("nav.dashboard"), icon: Activity },
+        { href: "/stats", label: t("nav.dashboard"), icon: LayoutDashboard },
         { href: "/community", label: t("nav.community"), icon: Users },
         { href: "/settings", label: t("nav.manage"), icon: Settings },
     ];
