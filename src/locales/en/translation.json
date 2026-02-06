@@ -10,7 +10,11 @@
         "save_success": "Saved successfully!",
         "emoji": "Emoji",
         "photo": "Photo",
-        "no_record": "No record"
+        "no_record": "No record",
+        "recommendation": "Recommendation",
+        "notifications": "Notifications",
+        "mark_all_read": "Mark all as read",
+        "mark_as_read": "Mark as read"
     },
     "nav": {
         "calendar": "Calendar",

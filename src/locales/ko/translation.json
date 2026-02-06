@@ -12,7 +12,10 @@
         "photo": "사진",
         "no_record": "기록 없음",
         "delete_account": "회원 탈퇴",
-        "delete_account_confirm": "정말 회원 탈퇴를 하시겠습니까? 작성하신 게시글과 모든 데이터가 삭제되며 복구할 수 없습니다."
+        "delete_account_confirm": "정말 회원 탈퇴를 하시겠습니까? 작성하신 게시글과 모든 데이터가 삭제되며 복구할 수 없습니다.",
+        "notifications": "알림",
+        "mark_all_read": "모두 읽음 처리",
+        "mark_as_read": "읽음 처리"
     },
     "nav": {
         "calendar": "달력",

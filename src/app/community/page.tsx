@@ -16,6 +16,7 @@ import { Post } from "./types";
 import { motion } from "framer-motion";
 import { PostCard } from "./components/post-card";
 import { cn } from "@/lib/utils";
+import { NotificationButton } from "@/components/notification-button";
 
 export default function CommunityPage() {
     const { t } = useTranslation();
@@ -497,6 +498,7 @@ export default function CommunityPage() {
                     <h1 className="text-lg font-black tracking-tight">{t("nav.community")}</h1>
 
                     <div className="flex items-center gap-2">
+                        {session && <NotificationButton />}
                         {!session && (
                             <button onClick={() => setShowAuthDialog(true)} className="flex items-center gap-1 bg-[var(--primary)] text-white px-3 py-1.5 rounded-full text-xs font-bold">
                                 <LogIn className="h-3 w-3" />

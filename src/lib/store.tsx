@@ -78,7 +78,19 @@ export interface VisualSettings {
     customColors: ThemeColors;
 }
 
+export interface Notification {
+    id: string;
+    userId: string;
+    type: 'comment' | 'care_reminder';
+    content: string;
+    link?: string;
+    isRead: boolean;
+    createdAt: string;
+    relatedId?: string;
+}
+
 interface ReptileContextType {
+    // ... existing types ...
     logs: LogEntry[];
     allLogs: LogEntry[];
     reptiles: Reptile[];
@@ -106,6 +118,10 @@ interface ReptileContextType {
     userProfile: UserProfile | null;
     updateUserProfile: (profile: Partial<UserProfile>) => void;
     session: Session | null;
+    notifications: Notification[];
+    fetchNotifications: () => Promise<void>;
+    markNotificationAsRead: (id: string) => Promise<void>;
+    deleteNotification: (id: string) => Promise<void>;
 }
 
 const ReptileContext = createContext<ReptileContextType | null>(null);
@@ -161,6 +177,7 @@ function markMigrationCompleted() {
 }
 
 export function ReptileProvider({ children }: { children: React.ReactNode }) {
+    // ... existing state ...
     const [reptiles, setReptiles] = useState<Reptile[]>([]);
     const [selectedReptileId, setSelectedReptileId] = useState<string>("");
     const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -169,8 +186,9 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
     const [session, setSession] = useState<Session | null>(null);
     const [foodPresets, setFoodPresets] = useState<FoodPreset[]>([]);
     const [hasMigrated, setHasMigrated] = useState(false);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
 
-    // Visual settings remain local for now (device preference)
+    // ... existing visualSettings state ...
     const [visualSettings, setVisualSettings] = useState({
         calViewMode: "dot" as "dot" | "emoji",
         language: "ko" as "ko" | "en",
@@ -195,7 +213,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         }
     });
 
-    // 1. Initialize Auth
+    // ... existing useEffects for Auth ...
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
@@ -205,19 +223,177 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
             setSession(session);
-            // Handle Logout: Reset to system theme if user logs out
             if (!session && _event === 'SIGNED_OUT') {
                 const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 setVisualSettings(prev => ({
                     ...prev,
                     theme: isDark ? 'dark' : 'light'
                 }));
-                localStorage.removeItem("reptile-visual-settings-v1"); // Optional: clear entirely or just update
+                localStorage.removeItem("reptile-visual-settings-v1");
             }
         });
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Notification Logic
+    const fetchNotifications = async () => {
+        if (!session) return;
+        const { data } = await supabase.from('notifications' as any)
+            .select('*')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false });
+
+        if (data) {
+            setNotifications((data as any[]).map(n => ({
+                id: n.id,
+                userId: n.user_id,
+                type: n.type as any,
+                content: n.content,
+                link: n.link,
+                isRead: n.is_read,
+                createdAt: n.created_at,
+                relatedId: n.related_id
+            })));
+        }
+    };
+
+    const markNotificationAsRead = async (id: string) => {
+        // Optimistic
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+        if (session) {
+            await supabase.from('notifications' as any).update({ is_read: true }).eq('id', id);
+        }
+    };
+
+    const deleteNotification = async (id: string) => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        if (session) {
+            await supabase.from('notifications' as any).delete().eq('id', id);
+        }
+    };
+
+    // Check for daily reminders (9 AM)
+    useEffect(() => {
+        if (!isLoaded || !session || reptiles.length === 0) return;
+
+        const checkDailyReminders = async () => {
+            const today = new Date();
+            const lastCheckDate = localStorage.getItem('last-reminder-check-date');
+            const todayStr = today.toISOString().split('T')[0];
+
+            // Only run if we haven't checked today
+            if (lastCheckDate === todayStr) return;
+
+            // Only run after 9 AM
+            if (today.getHours() < 9) return;
+
+            // Generate reminders
+            let newNotifications = 0;
+
+            for (const reptile of reptiles) {
+                if (!reptile.careSchedules) continue;
+
+                for (const schedule of reptile.careSchedules) {
+                    if (!schedule.enabled) continue;
+                    if (schedule.type !== 'feeding' && schedule.type !== 'cleaning') continue; // Only feeding/cleaning reminders as requested
+
+                    let due = false;
+                    const lastLog = logs
+                        .filter(l => l.reptileId === reptile.id && l.type === schedule.type)
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+                    if (schedule.scheduleMode === 'weekly' && schedule.specificDays) {
+                        if (schedule.specificDays.includes(today.getDay())) {
+                            // Needs check: did we already do it today?
+                            if (!lastLog || new Date(lastLog.date).toDateString() !== today.toDateString()) {
+                                due = true;
+                            }
+                        }
+                    } else if (schedule.scheduleMode === 'interval' && schedule.frequencyDays) {
+                        if (!lastLog) {
+                            due = true;
+                        } else {
+                            const lastDate = new Date(lastLog.date);
+                            const diffDays = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+                            if (diffDays >= schedule.frequencyDays) {
+                                // Check if we already did it today to avoid spam? 
+                                // Interval logic usually means "it's been X days". If I did it today, diff is 0.
+                                // Wait, if I did it today, diff is 0. So diffDays >= freq (e.g. 2) means I haven't done it recently.
+                                due = true;
+                            }
+                        }
+                    }
+
+                    if (due) {
+                        const content = schedule.type === 'feeding'
+                            ? `${reptile.name}의 밥 먹을 시간입니다!`
+                            : `${reptile.name}의 청소 시간입니다!`;
+
+                        // Check for duplicate
+                        const alreadyExists = notifications.some(n =>
+                            n.type === 'care_reminder' &&
+                            n.relatedId === reptile.id &&
+                            new Date(n.createdAt).toDateString() === today.toDateString()
+                        );
+                        if (alreadyExists) continue;
+
+                        // Insert notification
+                        await supabase.from('notifications' as any).insert({
+                            user_id: session.user.id,
+                            type: 'care_reminder',
+                            content: content,
+                            link: '/',
+                            related_id: reptile.id
+                        });
+                        newNotifications++;
+                    }
+                }
+            }
+
+            if (newNotifications > 0) {
+                fetchNotifications();
+            }
+            localStorage.setItem('last-reminder-check-date', todayStr);
+        };
+
+        checkDailyReminders();
+    }, [isLoaded, session, reptiles, logs, notifications]);
+
+    // Fetch initial notifications
+    useEffect(() => {
+        if (session) {
+            fetchNotifications();
+
+            // Subscribe to realtime
+            const output = supabase.channel('notifications-ctx')
+                .on(
+                    'postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${session.user.id}` },
+                    (payload) => {
+                        const newNotif = payload.new as any;
+                        setNotifications(prev => [{
+                            id: newNotif.id,
+                            userId: newNotif.user_id,
+                            type: newNotif.type,
+                            content: newNotif.content,
+                            link: newNotif.link,
+                            isRead: newNotif.is_read,
+                            createdAt: newNotif.created_at,
+                            relatedId: newNotif.related_id
+                        }, ...prev]);
+                    }
+                )
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(output);
+            };
+        }
+    }, [session]);
+
+    // ... existing useEffect for fetching data ...
+
 
     const isMigratingRef = React.useRef(false);
 
@@ -1025,7 +1201,11 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         deleteFoodPreset,
         userProfile,
         updateUserProfile,
-        session
+        session,
+        notifications,
+        fetchNotifications,
+        markNotificationAsRead,
+        deleteNotification
     };
 
     return (
