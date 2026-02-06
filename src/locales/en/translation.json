@@ -143,6 +143,7 @@
             "feeding": "Feeding Logs",
             "poop": "Poop Logs",
             "cleaning": "Cleaning Logs",
+            "misting": "Misting Logs",
             "memo": "Memo Logs",
             "weight": "Weight Logs",
             "success": "Success/Done",

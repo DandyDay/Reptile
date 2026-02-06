@@ -71,6 +71,7 @@ export interface VisualSettings {
         success: string;
         danger: string;
         weight: string;
+        misting: string;
     };
 }
 
@@ -186,7 +187,8 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             memo: "#e06666",
             success: "#ff4d94",
             danger: "#ff0055",
-            weight: "#f06292"
+            weight: "#f06292",
+            misting: "#06b6d4"
         }
     });
 

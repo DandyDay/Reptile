@@ -144,6 +144,7 @@
             "feeding": "먹이 기록",
             "poop": "배변 기록",
             "cleaning": "청소 기록",
+            "misting": "분무 기록",
             "memo": "메모",
             "weight": "몸무게 기록",
             "success": "성공/완료",

@@ -87,22 +87,38 @@ export function CalendarGrid({
 
                             <div className="flex flex-wrap items-center justify-center gap-0.5 px-1 mt-1 w-full">
                                 {isEmojiMode ? (
-                                    dayEvents.filter(ev => ev.type !== 'memo' && ev.type !== 'cleaning' && ev.type !== 'weight').slice(0, 4).map((ev, i) => (
-                                        <span key={i} className="text-[10px] leading-none">
-                                            {getLogIcon(ev)}
-                                        </span>
-                                    ))
+                                    dayEvents
+                                        .filter((ev, index, self) =>
+                                            ev.type !== 'memo' &&
+                                            ev.type !== 'cleaning' &&
+                                            ev.type !== 'weight' &&
+                                            index === self.findIndex((t) => t.type === ev.type)
+                                        )
+                                        .slice(0, 4)
+                                        .map((ev, i) => (
+                                            <span key={i} className="text-[10px] leading-none">
+                                                {getLogIcon(ev as Log)}
+                                            </span>
+                                        ))
                                 ) : (
-                                    dayEvents.filter(ev => ev.type !== 'memo' && ev.type !== 'cleaning' && ev.type !== 'weight').slice(0, 3).map((ev, i) => (
-                                        <div
-                                            key={i}
-                                            className={cn(
-                                                "h-1 w-1 rounded-full",
-                                                isSelected ? "bg-white" : ""
-                                            )}
-                                            style={!isSelected ? { backgroundColor: `var(--color-${ev.type})` } : {}}
-                                        />
-                                    ))
+                                    dayEvents
+                                        .filter((ev, index, self) =>
+                                            ev.type !== 'memo' &&
+                                            ev.type !== 'cleaning' &&
+                                            ev.type !== 'weight' &&
+                                            index === self.findIndex((t) => t.type === ev.type)
+                                        )
+                                        .slice(0, 3)
+                                        .map((ev, i) => (
+                                            <div
+                                                key={i}
+                                                className={cn(
+                                                    "h-1 w-1 rounded-full",
+                                                    isSelected ? "bg-white" : ""
+                                                )}
+                                                style={!isSelected ? { backgroundColor: `var(--color-${ev.type})` } : {}}
+                                            />
+                                        ))
                                 )}
                             </div>
 
