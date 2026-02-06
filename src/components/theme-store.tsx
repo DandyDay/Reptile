@@ -73,7 +73,11 @@ export function ThemeStore() {
             const formattedThemes = data.map((theme: any) => ({
                 ...theme,
                 author_name: theme.profiles?.full_name || theme.profiles?.username || "Unknown",
-                isLiked: likedThemeIds.includes(theme.id)
+                isLiked: likedThemeIds.includes(theme.id),
+                colors: {
+                    misting: "#06b6d4",
+                    ...theme.colors
+                }
             }));
 
             setThemes(formattedThemes);
@@ -219,36 +223,9 @@ export function ThemeStore() {
         }
     };
 
-    // Helper to generate example theme (kept for reference but unused in UI)
-    const publishExampleTheme = async () => {
-        if (!session) return;
-        const cherryBlossomColors = {
-            background: "#fff0f5", // Lavender Blush
-            card: "rgba(255, 255, 255, 0.95)", // Almost solid white
-            primary: "#ff8da1", // Slightly stronger pink for better visibility
-            secondary: "#ffdde1", // Warm pinkish secondary
-            accent: "#98d6aa", // Soft natural green
-            text: "#5d4037", // Deep warm brown (instead of gray/black)
-            border: "#ffcdd2", // defined pink border
-            muted: "#8d6e63", // earth tone for muted text
-            feeding: "#ffab91", // Warm coral
-            poop: "#a1887f", // Warm brown
-            cleaning: "#81d4fa", // Light clean blue
-            memo: "#b39ddb", // Soft purple
-            success: "#a5d6a7", // Soft green
-            danger: "#ef9a9a", // Soft red
-            weight: "#ffcc80" // Soft orange
-        };
 
-        if (confirm("Register 'Cherry Blossom' theme as example?")) {
-            await supabase.from('themes').insert({
-                user_id: session.user.id,
-                name: "Cherry Blossom 🌸",
-                colors: cherryBlossomColors
-            });
-            fetchThemes();
-        }
-    };
+
+
 
     return (
         <div className="space-y-6">
@@ -275,8 +252,7 @@ export function ThemeStore() {
                 </div>
 
                 <div className="flex gap-2">
-                    {/* Secret dev button for example theme */}
-                    {/* <button onClick={publishExampleTheme} className="text-xl hover:scale-110 transition-transform">🌸</button> */}
+
 
                     <button
                         onClick={handlePublishClick}
@@ -342,6 +318,7 @@ export function ThemeStore() {
                                         <div className="h-4 w-4 rounded-full" style={{ backgroundColor: theme.colors.feeding }}></div>
                                         <div className="h-4 w-4 rounded-full" style={{ backgroundColor: theme.colors.poop }}></div>
                                         <div className="h-4 w-4 rounded-full" style={{ backgroundColor: theme.colors.cleaning }}></div>
+                                        <div className="h-4 w-4 rounded-full" style={{ backgroundColor: theme.colors.misting }}></div>
                                     </div>
                                     <div className="h-2 w-10 mt-auto rounded-full opacity-50" style={{ backgroundColor: theme.colors.text }}></div>
                                 </div>

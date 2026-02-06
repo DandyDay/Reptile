@@ -937,7 +937,8 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             memo: "#a855f7",
             success: "#10b981",
             danger: "#ef4444",
-            weight: "#ec4899"
+            weight: "#ec4899",
+            misting: "#06b6d4"
         } : visualSettings.theme === 'dark' ? {
             background: "#0f172a",
             card: "rgba(30, 41, 59, 0.7)",
@@ -953,7 +954,8 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             memo: "#a855f7",
             success: "#10b981",
             danger: "#ef4444",
-            weight: "#ec4899"
+            weight: "#ec4899",
+            misting: "#06b6d4"
         } : {
             ...visualSettings.customColors,
         } as any;
@@ -971,6 +973,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         root.style.setProperty('--color-poop', colors.poop);
         root.style.setProperty('--color-cleaning', colors.cleaning);
         root.style.setProperty('--color-memo', colors.memo);
+        root.style.setProperty('--color-misting', colors.misting);
         root.style.setProperty('--destructive', colors.danger);
 
         // Add dynamic background radial gradients
