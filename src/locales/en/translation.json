@@ -188,6 +188,7 @@
         "no_comments": "No comments yet.",
         "login_required": "Login required.",
         "comment_failed": "Failed to post comment",
+        "reply": "Reply",
         "share_success": "URL copied to clipboard.",
         "tag_profile": "Tag Profile",
         "post": "Post",

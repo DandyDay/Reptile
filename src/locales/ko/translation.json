@@ -190,6 +190,7 @@
         "no_comments": "아직 댓글이 없습니다.",
         "login_required": "로그인이 필요합니다.",
         "comment_failed": "댓글 작성 실패",
+        "reply": "답글",
         "share_success": "URL이 복사되었습니다.",
         "tag_profile": "프로필 태그하기",
         "post": "게시",

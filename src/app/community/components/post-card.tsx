@@ -147,6 +147,35 @@ export function PostCard({
     };
 
     const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
+    const [commentMenuId, setCommentMenuId] = useState<string | null>(null);
+    const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
+    const [activePressId, setActivePressId] = useState<string | null>(null);
+    const pressTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const startPress = (id: string, isOwner: boolean, event: React.MouseEvent | React.TouchEvent) => {
+        if (!isOwner) return;
+        setActivePressId(id);
+
+        const target = event.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+
+        pressTimer.current = setTimeout(() => {
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+            setMenuPosition({ top: rect.top, right: window.innerWidth - rect.right + 8 });
+            setCommentMenuId(id);
+            setActivePressId(null);
+        }, 600);
+    };
+
+    const cancelPress = () => {
+        setActivePressId(null);
+        if (pressTimer.current) {
+            clearTimeout(pressTimer.current);
+            pressTimer.current = null;
+        }
+    };
 
     const handleDeleteCommentClick = (commentId: string) => {
         setCommentToDelete(commentId);
@@ -168,6 +197,7 @@ export function PostCard({
             alert("삭제 실패");
         }
         setCommentToDelete(null);
+        setCommentMenuId(null);
     };
 
     const [replyTo, setReplyTo] = useState<{ id: string, name: string } | null>(null);
@@ -508,9 +538,34 @@ export function PostCard({
                             ) : comments.length === 0 ? (
                                 <p className="text-center text-xs text-[var(--muted)] py-2">{t("community.no_comments")}</p>
                             ) : (
-                                <div className="space-y-3 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                                <div
+                                    className="space-y-3 max-h-60 overflow-y-auto pr-1 scrollbar-thin"
+                                    onClick={() => setCommentMenuId(null)}
+                                >
                                     {comments.map((comment) => (
-                                        <div key={comment.id} className="flex gap-2.5 group">
+                                        <div
+                                            key={comment.id}
+                                            className={cn(
+                                                "flex gap-2.5 group py-1 px-1.5 rounded-xl",
+                                                commentMenuId === comment.id && "bg-[var(--primary)]/10",
+                                                activePressId === comment.id && "bg-[var(--secondary)]"
+                                            )}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onContextMenu={(e) => {
+                                                if (currentUserId === comment.user_id) {
+                                                    e.preventDefault();
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setMenuPosition({ top: rect.top, right: window.innerWidth - rect.right + 8 });
+                                                    setCommentMenuId(comment.id);
+                                                }
+                                            }}
+                                            onTouchStart={(e) => startPress(comment.id, currentUserId === comment.user_id, e)}
+                                            onTouchEnd={cancelPress}
+                                            onTouchMove={cancelPress}
+                                            onMouseDown={(e) => startPress(comment.id, currentUserId === comment.user_id, e)}
+                                            onMouseUp={cancelPress}
+                                            onMouseLeave={cancelPress}
+                                        >
                                             <div className="h-8 w-8 rounded-full bg-slate-500/20 shrink-0 overflow-hidden">
                                                 {comment.profiles?.avatar_url ? (
                                                     <img src={comment.profiles.avatar_url} alt="" className="h-full w-full object-cover" />
@@ -526,26 +581,15 @@ export function PostCard({
                                                     </span>
                                                     <button
                                                         onClick={() => handleReply(comment.user_id, comment.profiles?.full_name || "Unknown")}
-                                                        className="text-[10px] text-[var(--primary)] font-medium opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+                                                        className="text-[10px] text-[var(--primary)] font-medium transition-opacity ml-1"
                                                     >
-                                                        Reply
+                                                        {t("community.reply")}
                                                     </button>
-                                                    {/* Delete Comment Button logic moved below */}
                                                 </div>
                                                 <div className="flex items-start justify-between gap-2">
                                                     <p className="text-sm text-[var(--foreground)] leading-snug flex-1">
                                                         {renderCommentContent(comment.content)}
                                                     </p>
-
-                                                    {/* Delete Comment Button - Only show if current user owns the comment */}
-                                                    {currentUserId === comment.user_id && (
-                                                        <button
-                                                            onClick={() => handleDeleteCommentClick(comment.id)}
-                                                            className="p-1 text-[var(--muted)] hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -557,11 +601,45 @@ export function PostCard({
                 )}
             </AnimatePresence>
 
-            {showAuthDialog && (
-                <div className="fixed inset-0 z-[110]">
-                    <AuthDialog onClose={() => setShowAuthDialog(false)} />
-                </div>
-            )}
+            {/* Comment Action Menu - Outside layout */}
+            <AnimatePresence>
+                {commentMenuId && menuPosition && (
+                    <>
+                        <div
+                            className="fixed inset-0 z-[100]"
+                            onClick={() => {
+                                setCommentMenuId(null);
+                                setMenuPosition(null);
+                            }}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                            style={{ top: menuPosition.top, right: menuPosition.right }}
+                            className="fixed z-[101] bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden"
+                        >
+                            <button
+                                onClick={() => {
+                                    handleDeleteCommentClick(commentMenuId);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 w-full transition-colors text-xs font-bold whitespace-nowrap"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>{t("common.delete")}</span>
+                            </button>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {
+                showAuthDialog && (
+                    <div className="fixed inset-0 z-[110]">
+                        <AuthDialog onClose={() => setShowAuthDialog(false)} />
+                    </div>
+                )
+            }
 
             <ConfirmDialog
                 isOpen={!!commentToDelete}
@@ -573,6 +651,6 @@ export function PostCard({
                 cancelText={t("common.cancel")}
                 variant="danger"
             />
-        </div>
+        </div >
     );
 }
