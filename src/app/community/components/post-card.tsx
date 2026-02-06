@@ -269,7 +269,7 @@ export function PostCard({
                     url: shareUrl
                 });
             } catch (err) {
-                console.log('Error sharing', err);
+
             }
         } else {
             try {

@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { format, isSameDay, startOfDay, isAfter, startOfMonth } from "date-fns";
 import { ko, enUS } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
-import { useReptileLogs, LogType } from "@/lib/store";
+import { useReptileLogs, LogType, LogEntry } from "@/lib/store";
 import { useTranslation } from "@/lib/i18n";
 import { CalendarHeader } from "@/components/calendar/calendar-header";
 import { CalendarGrid } from "@/components/calendar/calendar-grid";
@@ -12,6 +12,7 @@ import { CalendarLogList } from "@/components/calendar/calendar-log-list";
 import { CalendarLogForm } from "@/components/calendar/calendar-log-form";
 import { CalendarScheduledTasks } from "@/components/calendar/calendar-scheduled-tasks";
 import { Toast } from "@/components/toast";
+import { useLogForm } from "@/hooks/use-log-form";
 
 export function CalendarView() {
     const {
@@ -24,11 +25,17 @@ export function CalendarView() {
     const [selectedDate, setSelectedDate] = useState<Date | null>(startOfDay(new Date()));
     const [isPickerOpen, setIsPickerOpen] = useState(false);
 
-    // Form State
-    const [isFormOpen, setIsFormOpen] = useState(false);
-    const [initialFormDate, setInitialFormDate] = useState<Date>(startOfDay(new Date()));
-    const [initialLogType, setInitialLogType] = useState<LogType | undefined>(undefined);
-    const [editingLog, setEditingLog] = useState<LogType & any | null>(null);
+    // Form State (Custom Hook)
+    const {
+        isFormOpen,
+        initialFormDate,
+        initialLogType,
+        editingLog,
+        openForm,
+        closeForm,
+        editLog,
+        submitLog
+    } = useLogForm();
 
     // Toast State
     const [toastMessage, setToastMessage] = useState("");
@@ -51,21 +58,7 @@ export function CalendarView() {
         );
     }, [logs, currentReptile, selectedDate]);
 
-    const handleAddLog = (data: any) => {
-        if (data.id) {
-            const { id, ...fields } = data;
-            updateLog(id, fields);
-        } else {
-            addLog(data);
-        }
-        setIsFormOpen(false);
-        setEditingLog(null);
-    };
 
-    const handleEditLog = (log: any) => {
-        setEditingLog(log);
-        setIsFormOpen(true);
-    };
 
     const handleSetCurrentMonth = (newMonth: Date) => {
         setCurrentMonth(newMonth);
@@ -85,18 +78,8 @@ export function CalendarView() {
     };
 
     const handleOpenForm = (date?: Date, type?: LogType) => {
-        setEditingLog(null);
         const targetDate = startOfDay(date || selectedDate || new Date());
-        const today = startOfDay(new Date());
-
-        let targetType = type;
-        if (isAfter(targetDate, today) && !type) {
-            targetType = 'memo';
-        }
-
-        setInitialFormDate(targetDate);
-        setInitialLogType(targetType);
-        setIsFormOpen(true);
+        openForm(targetDate, type);
     };
 
     return (
@@ -186,7 +169,7 @@ export function CalendarView() {
                                 details: "",
                                 note: ""
                             });
-                            showToast(t("calendar.misting" as any) + " " + t("common.add" as any));
+                            showToast(`${t("calendar.misting")} ${t("common.add")}`);
                             return;
                         }
 
@@ -197,15 +180,15 @@ export function CalendarView() {
                             note: ""
                         });
                     }}
-                    onEditLog={handleEditLog}
+                    onEditLog={editLog}
                     allLogs={logs}
                 />
             </div>
 
             <CalendarLogForm
                 isOpen={isFormOpen}
-                onClose={() => setIsFormOpen(false)}
-                onSubmit={handleAddLog}
+                onClose={closeForm}
+                onSubmit={submitLog}
                 reptiles={reptiles}
                 currentReptile={currentReptile}
                 foodPresets={foodPresets}

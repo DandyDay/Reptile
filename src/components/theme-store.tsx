@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
-import { useReptileLogs } from "@/lib/store";
+import { useReptileLogs, ThemeColors } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { Loader2, Heart, Download, Upload, Palette, Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ import { Toast } from "@/components/toast";
 interface Theme {
     id: string;
     name: string;
-    colors: any;
+    colors: ThemeColors;
     created_at: string;
     likes_count: number;
     user_id: string;
@@ -67,17 +67,17 @@ export function ThemeStore() {
                     .from('theme_likes')
                     .select('theme_id')
                     .eq('user_id', currentUserId);
-                likedThemeIds = likes?.map((l: any) => l.theme_id) || [];
+                likedThemeIds = likes?.map((l: { theme_id: string }) => l.theme_id) || [];
             }
 
-            const formattedThemes = data.map((theme: any) => ({
+            const formattedThemes: Theme[] = data.map((theme: any) => ({
                 ...theme,
                 author_name: theme.profiles?.full_name || theme.profiles?.username || "Unknown",
                 isLiked: likedThemeIds.includes(theme.id),
                 colors: {
                     misting: "#06b6d4",
                     ...theme.colors
-                }
+                } as ThemeColors
             }));
 
             setThemes(formattedThemes);

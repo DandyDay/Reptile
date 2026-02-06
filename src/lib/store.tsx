@@ -51,28 +51,31 @@ export interface LogEntry {
 
 export type Log = LogEntry;
 
+export interface ThemeColors {
+    [key: string]: string;
+    background: string;
+    card: string;
+    primary: string;
+    secondary: string;
+    accent: string;
+    text: string;
+    border: string;
+    muted: string;
+    feeding: string;
+    poop: string;
+    cleaning: string;
+    memo: string;
+    success: string;
+    danger: string;
+    weight: string;
+    misting: string;
+}
+
 export interface VisualSettings {
     calViewMode: "dot" | "emoji";
     language: "ko" | "en";
     theme: "dark" | "light" | "custom";
-    customColors: {
-        background: string;
-        card: string;
-        primary: string;
-        secondary: string;
-        accent: string;
-        text: string;
-        border: string;
-        muted: string;
-        feeding: string;
-        poop: string;
-        cleaning: string;
-        memo: string;
-        success: string;
-        danger: string;
-        weight: string;
-        misting: string;
-    };
+    customColors: ThemeColors;
 }
 
 interface ReptileContextType {
@@ -493,7 +496,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 setFoodPresets(mappedPresets);
             }
 
-            console.log("Local data migrated successfully!");
+
             return true;
         } catch (error) {
             console.error("Failed to migrate local data:", error);
