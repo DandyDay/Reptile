@@ -285,76 +285,114 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
             // Only run if we haven't checked today
             if (lastCheckDate === todayStr) return;
 
+            // Set lock immediately to prevent re-entry
+            localStorage.setItem('last-reminder-check-date', todayStr);
+
             // Only run after 9 AM
             if (today.getHours() < 9) return;
 
-            // Generate reminders
-            let newNotifications = 0;
+            // Perform check
+            try {
+                let newNotifications = 0;
 
-            for (const reptile of reptiles) {
-                if (!reptile.careSchedules) continue;
+                for (const reptile of reptiles) {
+                    if (!reptile.careSchedules) continue;
 
-                for (const schedule of reptile.careSchedules) {
-                    if (!schedule.enabled) continue;
-                    if (schedule.type !== 'feeding' && schedule.type !== 'cleaning') continue; // Only feeding/cleaning reminders as requested
+                    for (const schedule of reptile.careSchedules) {
+                        if (!schedule.enabled) continue;
+                        if (schedule.type !== 'feeding' && schedule.type !== 'cleaning') continue;
 
-                    let due = false;
-                    const lastLog = logs
-                        .filter(l => l.reptileId === reptile.id && l.type === schedule.type)
-                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+                        let status: 'due' | 'overdue' | null = null;
+                        let overdueDays = 0;
 
-                    if (schedule.scheduleMode === 'weekly' && schedule.specificDays) {
-                        if (schedule.specificDays.includes(today.getDay())) {
-                            // Needs check: did we already do it today?
-                            if (!lastLog || new Date(lastLog.date).toDateString() !== today.toDateString()) {
-                                due = true;
+                        const lastLog = logs
+                            .filter(l => l.reptileId === reptile.id && l.type === schedule.type)
+                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+                        // Calculate last completed date (or default to very old date)
+                        const lastCompletedDate = lastLog ? new Date(lastLog.date) : new Date(0);
+                        const todayDate = new Date(todayStr); // Midnight today
+
+                        if (schedule.scheduleMode === 'weekly' && schedule.specificDays) {
+                            // Find the most recent scheduled day (including today)
+                            // Look back up to 7 days
+                            for (let i = 0; i < 7; i++) {
+                                const checkDate = new Date(todayDate);
+                                checkDate.setDate(todayDate.getDate() - i);
+
+                                if (schedule.specificDays.includes(checkDate.getDay())) {
+                                    // Found a scheduled day
+                                    // Check if we completed task on or after this day
+                                    if (lastCompletedDate < checkDate) {
+                                        // Task not done for this scheduled day
+                                        if (i === 0) {
+                                            status = 'due';
+                                        } else {
+                                            status = 'overdue';
+                                            overdueDays = i;
+                                        }
+                                    }
+                                    break; // Only care about the most recent one
+                                }
                             }
-                        }
-                    } else if (schedule.scheduleMode === 'interval' && schedule.frequencyDays) {
-                        if (!lastLog) {
-                            due = true;
-                        } else {
-                            const lastDate = new Date(lastLog.date);
-                            const diffDays = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+                        } else if (schedule.scheduleMode === 'interval' && schedule.frequencyDays) {
+                            const diffTime = todayDate.getTime() - lastCompletedDate.getTime();
+                            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
                             if (diffDays >= schedule.frequencyDays) {
-                                // Check if we already did it today to avoid spam? 
-                                // Interval logic usually means "it's been X days". If I did it today, diff is 0.
-                                // Wait, if I did it today, diff is 0. So diffDays >= freq (e.g. 2) means I haven't done it recently.
-                                due = true;
+                                if (diffDays === schedule.frequencyDays) {
+                                    status = 'due';
+                                } else {
+                                    status = 'overdue';
+                                    overdueDays = diffDays - schedule.frequencyDays;
+                                }
                             }
                         }
-                    }
 
-                    if (due) {
-                        const content = schedule.type === 'feeding'
-                            ? `${reptile.name}의 밥 먹을 시간입니다!`
-                            : `${reptile.name}의 청소 시간입니다!`;
+                        if (status) {
+                            let content = '';
+                            const taskName = schedule.type === 'feeding' ? '밥 먹을 시간' : '청소 시간';
 
-                        // Check for duplicate
-                        const alreadyExists = notifications.some(n =>
-                            n.type === 'care_reminder' &&
-                            n.relatedId === reptile.id &&
-                            new Date(n.createdAt).toDateString() === today.toDateString()
-                        );
-                        if (alreadyExists) continue;
+                            if (status === 'overdue') {
+                                content = `${reptile.name}의 ${taskName}이 ${overdueDays}일 지났습니다! 🚨`;
+                            } else {
+                                content = `${reptile.name}의 ${taskName}입니다!`;
+                            }
 
-                        // Insert notification
-                        await supabase.from('notifications' as any).insert({
-                            user_id: session.user.id,
-                            type: 'care_reminder',
-                            content: content,
-                            link: '/',
-                            related_id: reptile.id
-                        });
-                        newNotifications++;
+                            // Check for duplicate (Check if we already notified about this specific status today)
+                            // We use content check to allow "overdue" notification to fire if it wasn't fired today
+                            // But usually, we only want one notification per type per day
+                            const alreadyExists = notifications.some(n =>
+                                n.type === 'care_reminder' &&
+                                n.relatedId === reptile.id &&
+                                n.content.includes(taskName) && // Fuzzy match type
+                                new Date(n.createdAt).toDateString() === today.toDateString()
+                            );
+
+                            if (alreadyExists) continue;
+
+                            // Insert notification
+                            await supabase.from('notifications' as any).insert({
+                                user_id: session.user.id,
+                                type: 'care_reminder',
+                                content: content,
+                                link: '/',
+                                related_id: reptile.id
+                            });
+                            newNotifications++;
+                        }
                     }
                 }
+
+                if (newNotifications > 0) {
+                    fetchNotifications();
+                }
+            } catch (e) {
+                console.error("Error processing reminders", e);
+                // If failed, maybe clear storage so it retries? 
+                // But partial failure might cause duplicate on retry. safer to leave it.
             }
 
-            if (newNotifications > 0) {
-                fetchNotifications();
-            }
-            localStorage.setItem('last-reminder-check-date', todayStr);
         };
 
         checkDailyReminders();
