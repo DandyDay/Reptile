@@ -202,7 +202,7 @@ export function CalendarLogList({
 
                         <button
                             onClick={onAddLog}
-                            className="fixed bottom-24 right-6 md:absolute md:bottom-0 md:right-0 h-14 w-14 rounded-full bg-[var(--primary)] text-white shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-20"
+                            className="fixed bottom-24 right-6 md:bottom-10 md:right-10 h-14 w-14 rounded-full bg-[var(--primary)] text-white shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-20"
                             aria-label={t("calendar.add_log")}
                         >
                             <Plus className="h-6 w-6" />
