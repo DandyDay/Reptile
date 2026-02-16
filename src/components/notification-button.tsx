@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ko, enUS } from "date-fns/locale";
 import Link from "next/link";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, type TranslationKey } from "@/lib/i18n";
 
 function NotificationPanel({
     notifications,
@@ -29,7 +29,7 @@ function NotificationPanel({
     locale: any;
     onClose: () => void;
     onNotificationClick: (notif: any) => void;
-    t: (key: string) => string;
+    t: (key: TranslationKey) => string;
     buttonRef: React.RefObject<HTMLButtonElement | null>;
 }) {
     const [isMobile, setIsMobile] = useState(false);
