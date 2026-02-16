@@ -48,4 +48,20 @@ next-env.d.ts
 # Supabase
 supabase/functions/*/deno.lock
 
+# MCP
 .mcp.json
+
+# IDE / Editor
+.vscode/
+
+# AI Agent configs
+.agent/
+.claude/
+.gemini/
+CLAUDE.md
+
+# npm cache
+.npm-cache/
+
+# Temp / Notes
+modify.md
