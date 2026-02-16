@@ -241,6 +241,7 @@ export default function PostDetailPage() {
                     onLike={() => handleLike(post.id, post.isLiked || false)}
                     onDelete={() => setDeleteConfirmOpen(true)}
                     onEdit={() => router.push('/community')}
+                    initialShowComments={true}
                 />
             </main>
 

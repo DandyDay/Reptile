@@ -21,6 +21,7 @@ interface PostCardProps {
     onLike: () => void;
     onDelete: () => void;
     onEdit: () => void;
+    initialShowComments?: boolean;
 }
 
 export function PostCard({
@@ -29,7 +30,8 @@ export function PostCard({
     isOwner,
     onLike,
     onDelete,
-    onEdit
+    onEdit,
+    initialShowComments = false
 }: PostCardProps) {
     const { t } = useTranslation();
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -97,7 +99,7 @@ export function PostCard({
         scrollRef.current.scrollLeft = scrollLeft.current - walk;
     };
 
-    const [showComments, setShowComments] = useState(false);
+    const [showComments, setShowComments] = useState(initialShowComments);
     const [comments, setComments] = useState<Comment[]>([]);
     const [isCommentsLoading, setIsCommentsLoading] = useState(false);
     const [newComment, setNewComment] = useState("");
@@ -145,6 +147,13 @@ export function PostCard({
         }
         setShowComments(!showComments);
     };
+
+    // Auto-load comments when initialShowComments is true
+    useEffect(() => {
+        if (initialShowComments && !hasLoadedComments) {
+            fetchComments();
+        }
+    }, [initialShowComments]);
 
     const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
     const [commentMenuId, setCommentMenuId] = useState<string | null>(null);
@@ -540,7 +549,7 @@ export function PostCard({
                                 <p className="text-center text-xs text-[var(--muted)] py-2">{t("community.no_comments")}</p>
                             ) : (
                                 <div
-                                    className="space-y-4 max-h-80 overflow-y-auto pr-1 scrollbar-thin"
+                                    className="space-y-4"
                                     onClick={() => setCommentMenuId(null)}
                                 >
                                     {comments.filter((c: any) => !c.parent_id).map((comment) => (
