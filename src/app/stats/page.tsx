@@ -7,10 +7,16 @@ import { ko, enUS } from "date-fns/locale";
 import { useMemo, useState } from "react";
 import { ReptileHeader } from "@/components/reptile-header";
 import { useTranslation } from "@/lib/i18n";
+import { XPLevelBar } from "@/components/gamification/xp-level-bar";
+import { QuestPanel } from "@/components/gamification/quest-panel";
+import { CreatureViewer } from "@/components/creature/creature-viewer";
+import { useGamification } from "@/lib/gamification-store";
+import { UNLOCK_3D_LEVEL } from "@/lib/gamification";
 
 export default function StatsPage() {
     const { logs, isLoaded, visualSettings } = useReptileLogs();
     const { t } = useTranslation();
+    const { level } = useGamification();
     const locale = visualSettings?.language === 'ko' ? ko : enUS;
 
     const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
@@ -54,6 +60,15 @@ export default function StatsPage() {
         <main className="min-h-screen bg-[var(--background)] p-4 text-[var(--foreground)] md:p-8">
             <div className="mx-auto max-w-6xl space-y-6">
                 <ReptileHeader />
+
+                {/* Gamification: XP bar */}
+                <XPLevelBar />
+
+                {/* Creature viewer (always shown; 3D canvas only unlocks at level 5) */}
+                <CreatureViewer />
+
+                {/* Quest panel */}
+                <QuestPanel />
 
                 <div className="flex items-center gap-2 mb-4">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />

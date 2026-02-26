@@ -227,5 +227,31 @@
             "calcium": "Calcium",
             "vitamin": "Vitamins"
         }
+    },
+    "gamification": {
+        "level": "Level",
+        "xp": "XP",
+        "next_level": "Next Level",
+        "max_level": "Max Level",
+        "daily_quests": "Daily Quests",
+        "weekly_quests": "Weekly Quests",
+        "achievements": "Achievements",
+        "challenges": "Challenges",
+        "quest_complete": "Quest Complete!",
+        "unlock_3d": "3D Model Unlocked!",
+        "generate_3d": "Generate 3D Model",
+        "generating": "Generating...",
+        "creature_title": "My Creature",
+        "creature_placeholder": "Reach Level 5 to generate a 3D model of your reptile!",
+        "generate_3d_desc": "Create a 3D model from your reptile's photo",
+        "model_processing": "Generating 3D model... (up to 2 minutes)",
+        "model_failed": "3D model generation failed. Please try again.",
+        "no_photo": "No reptile photo found. Please set a profile photo first.",
+        "click_reaction": "Whoa!",
+        "tickle_reaction": "Hahaha",
+        "level_up": "Level Up!",
+        "completed": "Completed",
+        "in_progress": "In Progress",
+        "locked": "Locked"
     }
 }

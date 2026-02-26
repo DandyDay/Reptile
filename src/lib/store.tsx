@@ -855,6 +855,10 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         if (error) {
             console.error("Failed to add log", error);
             setLogs(prev => prev.filter(l => l.id !== newId));
+        } else {
+            window.dispatchEvent(new CustomEvent("reptile:log-added", {
+                detail: { type: entry.type, reptileId: targetReptileId }
+            }));
         }
     };
 

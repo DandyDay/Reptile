@@ -217,6 +217,7 @@ export type Database = {
                     id: string
                     updated_at: string | null
                     username: string | null
+                    total_xp: number
                 }
                 Insert: {
                     avatar_url?: string | null
@@ -226,6 +227,7 @@ export type Database = {
                     id: string
                     updated_at?: string | null
                     username?: string | null
+                    total_xp?: number
                 }
                 Update: {
                     avatar_url?: string | null
@@ -235,8 +237,136 @@ export type Database = {
                     id?: string
                     updated_at?: string | null
                     username?: string | null
+                    total_xp?: number
                 }
                 Relationships: []
+            }
+            quest_progress: {
+                Row: {
+                    id: string
+                    user_id: string
+                    quest_key: string
+                    period_key: string
+                    progress: number
+                    completed: boolean
+                    rewarded_at: string | null
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    quest_key: string
+                    period_key: string
+                    progress?: number
+                    completed?: boolean
+                    rewarded_at?: string | null
+                    created_at?: string
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    quest_key?: string
+                    period_key?: string
+                    progress?: number
+                    completed?: boolean
+                    rewarded_at?: string | null
+                    created_at?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "quest_progress_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
+            achievements: {
+                Row: {
+                    id: string
+                    user_id: string
+                    achievement_key: string
+                    unlocked_at: string
+                    xp_awarded: number
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    achievement_key: string
+                    unlocked_at?: string
+                    xp_awarded?: number
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    achievement_key?: string
+                    unlocked_at?: string
+                    xp_awarded?: number
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "achievements_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
+            reptile_3d_models: {
+                Row: {
+                    id: string
+                    reptile_id: string
+                    user_id: string
+                    task_id: string | null
+                    status: string
+                    glb_url: string | null
+                    thumbnail_url: string | null
+                    source_image_url: string | null
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    reptile_id: string
+                    user_id: string
+                    task_id?: string | null
+                    status?: string
+                    glb_url?: string | null
+                    thumbnail_url?: string | null
+                    source_image_url?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    reptile_id?: string
+                    user_id?: string
+                    task_id?: string | null
+                    status?: string
+                    glb_url?: string | null
+                    thumbnail_url?: string | null
+                    source_image_url?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "reptile_3d_models_reptile_id_fkey"
+                        columns: ["reptile_id"]
+                        isOneToOne: true
+                        referencedRelation: "reptiles"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "reptile_3d_models_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    }
+                ]
             }
             reptiles: {
                 Row: {
@@ -369,6 +499,15 @@ export type Database = {
                     theme_id: string
                 }
                 Returns: void
+            }
+            grant_xp: {
+                Args: {
+                    p_user_id: string
+                    p_source: string
+                    p_source_key: string
+                    p_xp_delta: number
+                }
+                Returns: number
             }
         }
         Enums: {

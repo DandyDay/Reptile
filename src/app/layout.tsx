@@ -11,6 +11,8 @@ export const metadata: Metadata = {
 
 import { BottomNav } from "@/components/bottom-nav";
 import { ReptileProvider } from "@/lib/store";
+import { GamificationProvider } from "@/lib/gamification-store";
+import { XPToast } from "@/components/gamification/xp-toast";
 
 export default function RootLayout({
   children,
@@ -21,8 +23,11 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)] pb-20 transition-colors duration-300`}>
         <ReptileProvider>
-          {children}
-          <BottomNav />
+          <GamificationProvider>
+            {children}
+            <BottomNav />
+            <XPToast />
+          </GamificationProvider>
         </ReptileProvider>
       </body>
     </html>

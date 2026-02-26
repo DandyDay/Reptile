@@ -228,5 +228,31 @@
             "calcium": "칼슘제",
             "vitamin": "비타민"
         }
+    },
+    "gamification": {
+        "level": "레벨",
+        "xp": "XP",
+        "next_level": "다음 레벨",
+        "max_level": "최고 레벨",
+        "daily_quests": "일일 퀘스트",
+        "weekly_quests": "주간 퀘스트",
+        "achievements": "업적",
+        "challenges": "챌린지",
+        "quest_complete": "퀘스트 완료!",
+        "unlock_3d": "3D 모델 언락!",
+        "generate_3d": "3D 모델 생성하기",
+        "generating": "생성 중...",
+        "creature_title": "나의 크리쳐",
+        "creature_placeholder": "레벨 5 달성 시 파충류의 3D 모델을 생성할 수 있어요!",
+        "generate_3d_desc": "파충류 사진으로 3D 모델을 만들어보세요",
+        "model_processing": "3D 모델 생성 중... (최대 2분 소요)",
+        "model_failed": "3D 모델 생성에 실패했습니다. 다시 시도해주세요.",
+        "no_photo": "파충류 프로필 사진이 없습니다. 먼저 사진을 설정해주세요.",
+        "click_reaction": "앗!",
+        "tickle_reaction": "하하하",
+        "level_up": "레벨 업!",
+        "completed": "완료",
+        "in_progress": "진행 중",
+        "locked": "잠김"
     }
 }
