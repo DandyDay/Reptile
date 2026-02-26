@@ -26,6 +26,7 @@ function QuestRow({
   const p = progress?.progress ?? 0;
   const completed = progress?.completed ?? false;
   const rewarded = progress?.rewarded ?? false;
+  const completions = progress?.completions ?? 0;
   const pct = Math.min((p / quest.target) * 100, 100);
 
   return (
@@ -67,16 +68,30 @@ function QuestRow({
           </div>
         </div>
         {quest.type === "challenge" && (
-          <span
-            className="inline-block text-xs px-1.5 py-0.5 rounded mt-0.5 mb-1"
-            style={{
-              background: "color-mix(in srgb, var(--accent), transparent 80%)",
-              color: "var(--accent)",
-              fontSize: "0.65rem",
-            }}
-          >
-            {lang === "ko" ? "🗓 주기 기반" : "🗓 Schedule-based"}
-          </span>
+          <div className="flex items-center gap-1.5 mt-0.5 mb-1 flex-wrap">
+            <span
+              className="inline-block text-xs px-1.5 py-0.5 rounded"
+              style={{
+                background: "color-mix(in srgb, var(--accent), transparent 80%)",
+                color: "var(--accent)",
+                fontSize: "0.65rem",
+              }}
+            >
+              {lang === "ko" ? "🗓 주기 기반" : "🗓 Schedule-based"}
+            </span>
+            {completions > 0 && (
+              <span
+                className="inline-block text-xs px-1.5 py-0.5 rounded font-semibold"
+                style={{
+                  background: "color-mix(in srgb, var(--primary), transparent 80%)",
+                  color: "var(--primary)",
+                  fontSize: "0.65rem",
+                }}
+              >
+                {lang === "ko" ? `${completions}번 완료` : `Completed ${completions}×`}
+              </span>
+            )}
+          </div>
         )}
         <div className="text-xs mt-0.5 mb-1.5" style={{ color: "var(--muted)" }}>
           {lang === "ko" ? quest.descKo : quest.descEn}
@@ -133,13 +148,14 @@ export function QuestPanel() {
   };
 
   const getProgressForQuest = (quest: QuestDef): QuestProgressEntry | undefined => {
-    if (quest.type === "achievement" || quest.type === "challenge") {
+    if (quest.type === "achievement") {
       return {
         progress: questProgress[quest.key]?.progress ?? 0,
         completed: unlockedAchievements.has(quest.key),
         rewarded: unlockedAchievements.has(quest.key),
       };
     }
+    // Challenges and daily/weekly use questProgress directly
     return questProgress[quest.key];
   };
 

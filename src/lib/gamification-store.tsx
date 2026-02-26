@@ -15,9 +15,11 @@ import {
 } from "./gamification";
 
 export interface QuestProgressEntry {
-  progress: number;
+  progress: number;       // For challenges: current streak; others: count
   completed: boolean;
   rewarded: boolean;
+  completions?: number;   // For repeatable challenges: how many times completed
+  lastRewardedAt?: string; // For repeatable challenges: ISO timestamp of last completion
 }
 
 export type QuestProgressMap = Record<string, QuestProgressEntry>;
@@ -147,13 +149,35 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
     setQuestProgress(map);
 
-    // Load achievements for this reptile
+    // Load challenge progress from quest_progress (repeatable, period_key = "challenge")
+    const { data: challengeData } = await supabase
+      .from("quest_progress")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("reptile_id", reptileId)
+      .eq("period_key", "challenge");
+
+    for (const chal of CHALLENGES) {
+      const chalRow = (challengeData ?? []).find((r) => r.quest_key === chal.key);
+      map[chal.key] = {
+        progress: 0,       // current streak — computed in evaluateQuests
+        completed: false,
+        rewarded: false,
+        completions: chalRow?.progress ?? 0,
+        lastRewardedAt: chalRow?.rewarded_at ?? undefined,
+      };
+    }
+
+    // Load achievements for this reptile (only true achievements, not challenges)
+    const challengeKeys = new Set(CHALLENGES.map((c) => c.key));
     const { data: achData } = await supabase
       .from("achievements")
       .select("achievement_key")
       .eq("user_id", userId)
       .eq("reptile_id", reptileId);
-    setUnlockedAchievements(new Set((achData ?? []).map((a) => a.achievement_key)));
+    setUnlockedAchievements(new Set(
+      (achData ?? []).map((a) => a.achievement_key).filter((k) => !challengeKeys.has(k))
+    ));
 
     // Auto-grant daily check-in (reptile-agnostic: once per day per user)
     if (!alreadyCheckedIn) {
@@ -345,31 +369,52 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // Challenges — schedule-aware streaks for current reptile
+        // Challenges — repeatable, schedule-aware streaks
         for (const chal of CHALLENGES) {
-          if (currentUnlocked.has(chal.key)) continue;
+          const existing = newProgress[chal.key];
+          const completions = existing?.completions ?? 0;
+          const sinceLocalDate = existing?.lastRewardedAt
+            ? localDateStr(new Date(existing.lastRewardedAt))
+            : undefined;
+
           const chalLogType = chal.logTypes?.[0] as "feeding" | "cleaning" | undefined;
           let streak = 0;
           if (chalLogType === "feeding" || chalLogType === "cleaning") {
-            streak = getOnScheduleStreak(reptileLogs, chalLogType, reptile.careSchedules);
+            streak = getOnScheduleStreak(reptileLogs, chalLogType, reptile.careSchedules, sinceLocalDate);
           }
-          newProgress[chal.key] = {
-            progress: Math.min(streak, chal.target),
-            completed: streak >= chal.target,
-            rewarded: currentUnlocked.has(chal.key),
-          };
+
           if (streak >= chal.target) {
-            const { error } = await supabase.from("achievements").insert({
-              user_id: userId,
-              reptile_id: reptile.id,
-              achievement_key: chal.key,
-              xp_awarded: chal.xp,
-            });
-            if (!error) {
-              await grantXp("achievement", chal.key, chal.xp);
-              setUnlockedAchievements((prev) => new Set([...prev, chal.key]));
-              newProgress[chal.key].rewarded = true;
-            }
+            // Completed! Grant XP, record in quest_progress, reset streak
+            const newCompletions = completions + 1;
+            const nowIso = new Date().toISOString();
+            await grantXp("challenge", chal.key, chal.xp);
+            await supabase.from("quest_progress").upsert(
+              {
+                user_id: userId,
+                reptile_id: reptile.id,
+                quest_key: chal.key,
+                period_key: "challenge",
+                progress: newCompletions,
+                completed: false,
+                rewarded_at: nowIso,
+              },
+              { onConflict: "user_id,reptile_id,quest_key,period_key" }
+            );
+            newProgress[chal.key] = {
+              progress: 0,      // streak resets after completion
+              completed: false,
+              rewarded: false,
+              completions: newCompletions,
+              lastRewardedAt: nowIso,
+            };
+          } else {
+            newProgress[chal.key] = {
+              progress: streak,
+              completed: false,
+              rewarded: false,
+              completions,
+              lastRewardedAt: existing?.lastRewardedAt,
+            };
           }
         }
 

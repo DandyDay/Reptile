@@ -92,12 +92,17 @@ export function getWeeklyPeriodKey(date: Date = new Date()): string {
 export function getOnScheduleStreak(
   logs: LogEntry[],
   logType: "feeding" | "cleaning",
-  careSchedules?: CareSchedule[]
+  careSchedules?: CareSchedule[],
+  sinceLocalDate?: string  // YYYY-MM-DD: only count logs strictly after this date (challenge reset point)
 ): number {
   const schedule = careSchedules?.find((s) => s.type === logType && s.enabled);
-  const typeLogs = logs
+  let typeLogs = logs
     .filter((l) => l.type === logType)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  if (sinceLocalDate) {
+    typeLogs = typeLogs.filter((l) => localDateStr(new Date(l.date)) > sinceLocalDate);
+  }
 
   if (typeLogs.length === 0) return 0;
 
