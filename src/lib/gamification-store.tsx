@@ -30,8 +30,8 @@ export interface Model3DStatus {
 }
 
 interface GamificationContextType {
-  totalXp: number;
-  level: number;
+  totalXp: number;   // Current reptile's XP
+  level: number;     // Current reptile's level
   questProgress: QuestProgressMap;
   unlockedAchievements: Set<string>;
   model3DStatus: Model3DStatus | null;
@@ -55,115 +55,135 @@ export function useGamification() {
   return useContext(GamificationContext);
 }
 
-// Returns local date string 'YYYY-MM-DD' (avoids UTC offset issues)
+// Local date string (avoids UTC offset issues)
 function localDateStr(date: Date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-// Monday of the current local week as 'YYYY-MM-DD'
 function getMondayStr(): string {
   const now = new Date();
-  const day = now.getDay(); // 0=Sun
+  const day = now.getDay();
   now.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
   return localDateStr(now);
 }
 
-// Extract local date from log date string
 function logLocalDate(dateStr: string): string {
   return localDateStr(new Date(dateStr));
 }
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
-  const { session, allLogs, currentReptile } = useReptileLogs();
-  const currentReptileRef = useRef<Reptile | null>(null);
-  useEffect(() => { currentReptileRef.current = currentReptile ?? null; }, [currentReptile]);
+  const { session, allLogs, currentReptile, reptiles } = useReptileLogs();
+
+  // Per-reptile XP state
   const [totalXp, setTotalXp] = useState(0);
   const [questProgress, setQuestProgress] = useState<QuestProgressMap>({});
   const [unlockedAchievements, setUnlockedAchievements] = useState<Set<string>>(new Set());
   const [model3DStatus, setModel3DStatus] = useState<Model3DStatus | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Refs for latest state without causing useCallback re-creation
   const questProgressRef = useRef<QuestProgressMap>({});
   const unlockedAchievementsRef = useRef<Set<string>>(new Set());
+  const currentReptileRef = useRef<Reptile | null>(null);
   const evaluatingRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollCountRef = useRef(0);
-  const MAX_POLL_ATTEMPTS = 120; // 10 minutes at 5s intervals
+  const MAX_POLL_ATTEMPTS = 120;
+  const prevReptileIdRef = useRef<string | null>(null);
 
-  // Keep refs in sync with state
+  // Keep refs in sync
   useEffect(() => { questProgressRef.current = questProgress; }, [questProgress]);
   useEffect(() => { unlockedAchievementsRef.current = unlockedAchievements; }, [unlockedAchievements]);
+  useEffect(() => { currentReptileRef.current = currentReptile ?? null; }, [currentReptile]);
 
   const level = getLevel(totalXp);
 
-  // Load initial state from Supabase — pass userId to avoid stale closure
-  const loadGamificationData = useCallback(async (userId: string) => {
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("total_xp")
-      .eq("id", userId)
-      .single();
-    if (profileData) setTotalXp(profileData.total_xp ?? 0);
+  // Load gamification data for a specific reptile
+  const loadForReptile = useCallback(async (userId: string, reptileId: string) => {
+    setIsLoaded(false);
 
+    // Load reptile's XP
+    const { data: reptileData } = await supabase
+      .from("reptiles")
+      .select("total_xp")
+      .eq("id", reptileId)
+      .eq("user_id", userId)
+      .single();
+    setTotalXp(reptileData?.total_xp ?? 0);
+
+    // Load quest progress for this reptile + current periods
     const dailyKey = getDailyPeriodKey();
     const weeklyKey = getWeeklyPeriodKey();
     const { data: progressData } = await supabase
       .from("quest_progress")
       .select("*")
       .eq("user_id", userId)
+      .eq("reptile_id", reptileId)
       .in("period_key", [dailyKey, weeklyKey]);
 
-    if (progressData) {
-      const map: QuestProgressMap = {};
-      for (const row of progressData) {
-        map[row.quest_key] = {
-          progress: row.progress,
-          completed: row.completed,
-          rewarded: row.rewarded_at != null,
-        };
-      }
-      setQuestProgress(map);
+    const map: QuestProgressMap = {};
+    for (const row of progressData ?? []) {
+      map[row.quest_key] = {
+        progress: row.progress,
+        completed: row.completed,
+        rewarded: row.rewarded_at != null,
+      };
     }
 
+    // Also check if daily_open_app was already rewarded today (user-level, no reptile_id)
+    const { data: openAppRow } = await supabase
+      .from("quest_progress")
+      .select("rewarded_at")
+      .eq("user_id", userId)
+      .is("reptile_id", null)
+      .eq("quest_key", "daily_open_app")
+      .eq("period_key", dailyKey)
+      .maybeSingle();
+    const alreadyCheckedIn = openAppRow?.rewarded_at != null;
+    map["daily_open_app"] = {
+      progress: alreadyCheckedIn ? 1 : 0,
+      completed: alreadyCheckedIn,
+      rewarded: alreadyCheckedIn,
+    };
+
+    setQuestProgress(map);
+
+    // Load achievements for this reptile
     const { data: achData } = await supabase
       .from("achievements")
       .select("achievement_key")
-      .eq("user_id", userId);
-    if (achData) {
-      setUnlockedAchievements(new Set(achData.map((a) => a.achievement_key)));
-    }
+      .eq("user_id", userId)
+      .eq("reptile_id", reptileId);
+    setUnlockedAchievements(new Set((achData ?? []).map((a) => a.achievement_key)));
 
-    // Auto-grant daily_open_app attendance quest (opening the app = check-in)
-    const todayKey = getDailyPeriodKey();
-    const alreadyCheckedIn = progressData?.some(
-      (p) => p.quest_key === "daily_open_app" && p.period_key === todayKey && p.rewarded_at != null
-    );
+    // Auto-grant daily check-in (reptile-agnostic: once per day per user)
     if (!alreadyCheckedIn) {
       const openAppXp = 2;
-      // Grant XP directly (avoid circular dep with grantXp callback)
+      // Grant XP to this reptile
       const { data: newXp } = await supabase.rpc("grant_xp", {
         p_user_id: userId,
+        p_reptile_id: reptileId,
         p_source: "quest",
         p_source_key: "daily_open_app",
         p_xp_delta: openAppXp,
       });
       if (typeof newXp === "number") setTotalXp(newXp);
+      // Record as user-level (reptile_id = null) so it only fires once per day
       await supabase.from("quest_progress").upsert(
         {
           user_id: userId,
+          reptile_id: null,
           quest_key: "daily_open_app",
-          period_key: todayKey,
+          period_key: dailyKey,
           progress: 1,
           completed: true,
           rewarded_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,quest_key,period_key" }
+        { onConflict: "user_id,reptile_id,quest_key,period_key" }
       );
-      // Dispatch XP toast after a small delay (so UI is ready)
+      setQuestProgress((prev) => ({
+        ...prev,
+        daily_open_app: { progress: 1, completed: true, rewarded: true },
+      }));
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent("xp-gain", { detail: { xp: openAppXp } }));
       }, 1500);
@@ -172,20 +192,30 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     setIsLoaded(true);
   }, []);
 
+  // Re-load when session or selected reptile changes
   useEffect(() => {
     if (!session?.user) {
       setIsLoaded(true);
       return;
     }
-    loadGamificationData(session.user.id);
-  }, [session?.user?.id, loadGamificationData]);
+    const reptileId = currentReptile?.id;
+    if (!reptileId) return;
+    // Only reload if reptile actually changed
+    if (reptileId === prevReptileIdRef.current) return;
+    prevReptileIdRef.current = reptileId;
+    loadForReptile(session.user.id, reptileId);
+  }, [session?.user?.id, currentReptile?.id, loadForReptile]);
 
+  // Grant XP to the current reptile
   const grantXp = useCallback(
     async (source: string, sourceKey: string, xpDelta: number) => {
-      if (!session?.user) return;
+      const userId = session?.user?.id;
+      const reptileId = currentReptileRef.current?.id;
+      if (!userId || !reptileId) return;
       try {
         const { data: newXp } = await supabase.rpc("grant_xp", {
-          p_user_id: session.user.id,
+          p_user_id: userId,
+          p_reptile_id: reptileId,
           p_source: source,
           p_source_key: sourceKey,
           p_xp_delta: xpDelta,
@@ -201,26 +231,31 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
   const upsertQuestProgress = useCallback(
     async (questKey: string, periodKey: string, progress: number, completed: boolean, rewarded: boolean) => {
-      if (!session?.user) return;
+      const userId = session?.user?.id;
+      const reptileId = currentReptileRef.current?.id;
+      if (!userId || !reptileId) return;
       await supabase.from("quest_progress").upsert(
         {
-          user_id: session.user.id,
+          user_id: userId,
+          reptile_id: reptileId,
           quest_key: questKey,
           period_key: periodKey,
           progress,
           completed,
           rewarded_at: rewarded ? new Date().toISOString() : null,
         },
-        { onConflict: "user_id,quest_key,period_key" }
+        { onConflict: "user_id,reptile_id,quest_key,period_key" }
       );
     },
     [session?.user?.id]
   );
 
-  // evaluateQuests reads from refs (not state) to avoid stale closure and dep array bloat
+  // Quest evaluation: uses refs to avoid stale closures
   const evaluateQuests = useCallback(
     async (logs: LogEntry[]) => {
-      if (!session?.user || evaluatingRef.current) return;
+      const userId = session?.user?.id;
+      const reptile = currentReptileRef.current;
+      if (!userId || !reptile || evaluatingRef.current) return;
       evaluatingRef.current = true;
 
       try {
@@ -234,22 +269,24 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
         const newProgress: QuestProgressMap = { ...currentQuestProgress };
 
-        // Count logs for a period (uses local dates)
+        // Filter logs to current reptile
+        const reptileLogs = logs.filter((l) => l.reptileId === reptile.id);
+
         const countLogs = (periodStart: string, periodEnd: string, logTypes?: string[]) =>
-          logs.filter((l) => {
+          reptileLogs.filter((l) => {
             const d = logLocalDate(l.date);
             return d >= periodStart && d <= periodEnd && (!logTypes || logTypes.includes(l.type));
           }).length;
 
-        // Count unique feeding days this week
         const weeklyFeedingDayCount = new Set(
-          logs
+          reptileLogs
             .filter((l) => l.type === "feeding" && logLocalDate(l.date) >= mondayStr)
             .map((l) => logLocalDate(l.date))
         ).size;
 
-        // Daily quests
+        // Daily quests (skip daily_open_app — auto-handled on load)
         for (const quest of DAILY_QUESTS) {
+          if (quest.key === "daily_open_app") continue;
           const existing = newProgress[quest.key];
           if (existing?.rewarded) continue;
 
@@ -269,7 +306,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           const existing = newProgress[quest.key];
           if (existing?.rewarded) continue;
 
-          const count = quest.key === "weekly_feed_7"
+          const count = quest.key === "weekly_feed_on_time"
             ? weeklyFeedingDayCount
             : countLogs(mondayStr, today, quest.logTypes);
           const completed = count >= quest.target;
@@ -282,12 +319,12 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // Achievements (one-time)
+        // Achievements (per-reptile)
         for (const ach of ACHIEVEMENTS) {
           if (currentUnlocked.has(ach.key)) continue;
           const totalCount = ach.logTypes
-            ? logs.filter((l) => ach.logTypes!.includes(l.type)).length
-            : logs.length;
+            ? reptileLogs.filter((l) => ach.logTypes!.includes(l.type)).length
+            : reptileLogs.length;
           newProgress[ach.key] = {
             progress: Math.min(totalCount, ach.target),
             completed: totalCount >= ach.target,
@@ -295,7 +332,8 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           };
           if (totalCount >= ach.target) {
             const { error } = await supabase.from("achievements").insert({
-              user_id: session.user.id,
+              user_id: userId,
+              reptile_id: reptile.id,
               achievement_key: ach.key,
               xp_awarded: ach.xp,
             });
@@ -307,21 +345,14 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // Challenges — schedule-aware on-time streaks per current reptile
-        const reptile = currentReptileRef.current;
-        // Use only logs for the currently selected reptile for streak calc
-        const reptileLogs = reptile ? logs.filter((l) => l.reptileId === reptile.id) : logs;
-
+        // Challenges — schedule-aware streaks for current reptile
         for (const chal of CHALLENGES) {
           if (currentUnlocked.has(chal.key)) continue;
-
-          // Determine which logType to streak on
           const chalLogType = chal.logTypes?.[0] as "feeding" | "cleaning" | undefined;
           let streak = 0;
           if (chalLogType === "feeding" || chalLogType === "cleaning") {
-            streak = getOnScheduleStreak(reptileLogs, chalLogType, reptile?.careSchedules);
+            streak = getOnScheduleStreak(reptileLogs, chalLogType, reptile.careSchedules);
           }
-
           newProgress[chal.key] = {
             progress: Math.min(streak, chal.target),
             completed: streak >= chal.target,
@@ -329,7 +360,8 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           };
           if (streak >= chal.target) {
             const { error } = await supabase.from("achievements").insert({
-              user_id: session.user.id,
+              user_id: userId,
+              reptile_id: reptile.id,
               achievement_key: chal.key,
               xp_awarded: chal.xp,
             });
@@ -347,37 +379,32 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       }
     },
     [session?.user?.id, grantXp, upsertQuestProgress]
-    // intentionally excludes questProgress/unlockedAchievements — read via refs instead
   );
 
-  // Stable ref to evaluateQuests for the event listener
   const evaluateQuestsRef = useRef(evaluateQuests);
   useEffect(() => { evaluateQuestsRef.current = evaluateQuests; }, [evaluateQuests]);
 
-  // Listen for log-added events (uses ref so listener is only registered once)
+  // Listen for log-added events
   useEffect(() => {
     const handler = () => {
       if (!session?.user) return;
-      // allLogs may not yet reflect the new entry; use a short delay
       setTimeout(() => evaluateQuestsRef.current(allLogs), 100);
     };
     window.addEventListener("reptile:log-added", handler);
     return () => window.removeEventListener("reptile:log-added", handler);
   }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-evaluate when allLogs changes (handles initial load)
+  // Re-evaluate when logs change
   useEffect(() => {
     if (isLoaded && session?.user && allLogs.length > 0) {
       evaluateQuests(allLogs);
     }
   }, [isLoaded, session?.user?.id, allLogs.length, evaluateQuests]);
 
-  // gamification.ts already uses local time for streak calc
-  // but we override it here for safety
+  // 3D model generation
   const generate3DModel = useCallback(
     async (reptileId: string, imageUrl: string) => {
       if (!session?.user) return;
-
       let publicImageUrl = imageUrl;
       if (imageUrl.startsWith("data:")) {
         const blob = await fetch(imageUrl).then((r) => r.blob());
@@ -385,35 +412,20 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(fileName, blob, { upsert: true });
-        if (uploadError) {
-          console.error("Failed to upload source image", uploadError);
-          return;
-        }
+        if (uploadError) { console.error("Upload failed", uploadError); return; }
         const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
         publicImageUrl = urlData.publicUrl;
       }
-
       const res = await fetch("/api/meshy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create", imageUrl: publicImageUrl }),
       });
       const data = await res.json();
-      if (!data.result) {
-        console.error("Meshy API error", data);
-        return;
-      }
-
+      if (!data.result) { console.error("Meshy API error", data); return; }
       const taskId = data.result;
       await supabase.from("reptile_3d_models").upsert(
-        {
-          reptile_id: reptileId,
-          user_id: session.user.id,
-          task_id: taskId,
-          status: "processing",
-          source_image_url: publicImageUrl,
-          updated_at: new Date().toISOString(),
-        },
+        { reptile_id: reptileId, user_id: session.user.id, task_id: taskId, status: "processing", source_image_url: publicImageUrl, updated_at: new Date().toISOString() },
         { onConflict: "reptile_id" }
       );
       setModel3DStatus({ status: "processing", glbUrl: null, thumbnailUrl: null, taskId });
@@ -422,106 +434,50 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     [session?.user?.id] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const startPolling = useCallback(
-    (reptileId: string, taskId: string) => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-      pollCountRef.current = 0;
-
-      pollIntervalRef.current = setInterval(async () => {
-        pollCountRef.current += 1;
-
-        // Timeout after MAX_POLL_ATTEMPTS
-        if (pollCountRef.current > MAX_POLL_ATTEMPTS) {
-          clearInterval(pollIntervalRef.current!);
-          await supabase
-            .from("reptile_3d_models")
-            .update({ status: "failed", updated_at: new Date().toISOString() })
-            .eq("reptile_id", reptileId);
-          setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
-          return;
-        }
-
-        try {
-          const res = await fetch("/api/meshy", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "poll", taskId }),
-          });
-
-          if (!res.ok) return; // retry on non-200
-
-          const data = await res.json();
-
-          if (data.status === "SUCCEEDED") {
-            const glbUrl = data.model_urls?.glb ?? null;
-            const thumbnailUrl = data.thumbnail_url ?? null;
-            await supabase
-              .from("reptile_3d_models")
-              .update({ status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString() })
-              .eq("reptile_id", reptileId);
-            setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
-            clearInterval(pollIntervalRef.current!);
-          } else if (data.status === "FAILED") {
-            await supabase
-              .from("reptile_3d_models")
-              .update({ status: "failed", updated_at: new Date().toISOString() })
-              .eq("reptile_id", reptileId);
-            setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
-            clearInterval(pollIntervalRef.current!);
-          }
-        } catch (err) {
-          console.error("Polling error:", err);
-          // Don't clear interval — retry on next tick
-        }
-      }, 5000);
-    },
-    []
-  );
-
-  const fetchModel3DStatus = useCallback(
-    async (reptileId: string) => {
-      if (!session?.user) return;
-      const { data } = await supabase
-        .from("reptile_3d_models")
-        .select("*")
-        .eq("reptile_id", reptileId)
-        .single();
-
-      if (data) {
-        const status = data.status as Model3DStatus["status"];
-        setModel3DStatus({
-          status,
-          glbUrl: data.glb_url,
-          thumbnailUrl: data.thumbnail_url,
-          taskId: data.task_id,
-        });
-        if (status === "processing" && data.task_id) {
-          startPolling(reptileId, data.task_id);
-        }
+  const startPolling = useCallback((reptileId: string, taskId: string) => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    pollCountRef.current = 0;
+    pollIntervalRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current > MAX_POLL_ATTEMPTS) {
+        clearInterval(pollIntervalRef.current!);
+        await supabase.from("reptile_3d_models").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reptile_id", reptileId);
+        setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
+        return;
       }
-    },
-    [session?.user?.id, startPolling]
-  );
-
-  useEffect(() => {
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
+      try {
+        const res = await fetch("/api/meshy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "poll", taskId }) });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === "SUCCEEDED") {
+          const glbUrl = data.model_urls?.glb ?? null;
+          const thumbnailUrl = data.thumbnail_url ?? null;
+          await supabase.from("reptile_3d_models").update({ status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString() }).eq("reptile_id", reptileId);
+          setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
+          clearInterval(pollIntervalRef.current!);
+        } else if (data.status === "FAILED") {
+          await supabase.from("reptile_3d_models").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reptile_id", reptileId);
+          setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
+          clearInterval(pollIntervalRef.current!);
+        }
+      } catch (err) { console.error("Polling error:", err); }
+    }, 5000);
   }, []);
 
+  const fetchModel3DStatus = useCallback(async (reptileId: string) => {
+    if (!session?.user) return;
+    const { data } = await supabase.from("reptile_3d_models").select("*").eq("reptile_id", reptileId).single();
+    if (data) {
+      const status = data.status as Model3DStatus["status"];
+      setModel3DStatus({ status, glbUrl: data.glb_url, thumbnailUrl: data.thumbnail_url, taskId: data.task_id });
+      if (status === "processing" && data.task_id) startPolling(reptileId, data.task_id);
+    }
+  }, [session?.user?.id, startPolling]);
+
+  useEffect(() => () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); }, []);
+
   return (
-    <GamificationContext.Provider
-      value={{
-        totalXp,
-        level,
-        questProgress,
-        unlockedAchievements,
-        model3DStatus,
-        isLoaded,
-        generate3DModel,
-        fetchModel3DStatus,
-      }}
-    >
+    <GamificationContext.Provider value={{ totalXp, level, questProgress, unlockedAchievements, model3DStatus, isLoaded, generate3DModel, fetchModel3DStatus }}>
       {children}
     </GamificationContext.Provider>
   );

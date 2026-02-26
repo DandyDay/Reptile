@@ -245,6 +245,7 @@ export type Database = {
                 Row: {
                     id: string
                     user_id: string
+                    reptile_id: string | null
                     quest_key: string
                     period_key: string
                     progress: number
@@ -255,6 +256,7 @@ export type Database = {
                 Insert: {
                     id?: string
                     user_id: string
+                    reptile_id?: string | null
                     quest_key: string
                     period_key: string
                     progress?: number
@@ -265,6 +267,7 @@ export type Database = {
                 Update: {
                     id?: string
                     user_id?: string
+                    reptile_id?: string | null
                     quest_key?: string
                     period_key?: string
                     progress?: number
@@ -286,6 +289,7 @@ export type Database = {
                 Row: {
                     id: string
                     user_id: string
+                    reptile_id: string | null
                     achievement_key: string
                     unlocked_at: string
                     xp_awarded: number
@@ -293,6 +297,7 @@ export type Database = {
                 Insert: {
                     id?: string
                     user_id: string
+                    reptile_id?: string | null
                     achievement_key: string
                     unlocked_at?: string
                     xp_awarded?: number
@@ -300,6 +305,7 @@ export type Database = {
                 Update: {
                     id?: string
                     user_id?: string
+                    reptile_id?: string | null
                     achievement_key?: string
                     unlocked_at?: string
                     xp_awarded?: number
@@ -380,6 +386,7 @@ export type Database = {
                     photo_url: string | null
                     species: string | null
                     user_id: string
+                    total_xp: number
                 }
                 Insert: {
                     birth_date?: string | null
@@ -392,6 +399,7 @@ export type Database = {
                     photo_url?: string | null
                     species?: string | null
                     user_id: string
+                    total_xp?: number
                 }
                 Update: {
                     birth_date?: string | null
@@ -404,6 +412,7 @@ export type Database = {
                     photo_url?: string | null
                     species?: string | null
                     user_id?: string
+                    total_xp?: number
                 }
                 Relationships: [
                     {
@@ -503,6 +512,7 @@ export type Database = {
             grant_xp: {
                 Args: {
                     p_user_id: string
+                    p_reptile_id: string
                     p_source: string
                     p_source_key: string
                     p_xp_delta: number
