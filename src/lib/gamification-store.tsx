@@ -8,12 +8,10 @@ import {
   WEEKLY_QUESTS,
   ACHIEVEMENTS,
   CHALLENGES,
-  QuestDef,
   getDailyPeriodKey,
   getWeeklyPeriodKey,
   getFeedingStreak,
   getLevel,
-  UNLOCK_3D_LEVEL,
 } from "./gamification";
 
 export interface QuestProgressEntry {
@@ -57,6 +55,27 @@ export function useGamification() {
   return useContext(GamificationContext);
 }
 
+// Returns local date string 'YYYY-MM-DD' (avoids UTC offset issues)
+function localDateStr(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Monday of the current local week as 'YYYY-MM-DD'
+function getMondayStr(): string {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  now.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  return localDateStr(now);
+}
+
+// Extract local date from log date string
+function logLocalDate(dateStr: string): string {
+  return localDateStr(new Date(dateStr));
+}
+
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
   const { session, allLogs } = useReptileLogs();
   const [totalXp, setTotalXp] = useState(0);
@@ -64,25 +83,23 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const [unlockedAchievements, setUnlockedAchievements] = useState<Set<string>>(new Set());
   const [model3DStatus, setModel3DStatus] = useState<Model3DStatus | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // Refs for latest state without causing useCallback re-creation
+  const questProgressRef = useRef<QuestProgressMap>({});
+  const unlockedAchievementsRef = useRef<Set<string>>(new Set());
   const evaluatingRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollCountRef = useRef(0);
+  const MAX_POLL_ATTEMPTS = 120; // 10 minutes at 5s intervals
+
+  // Keep refs in sync with state
+  useEffect(() => { questProgressRef.current = questProgress; }, [questProgress]);
+  useEffect(() => { unlockedAchievementsRef.current = unlockedAchievements; }, [unlockedAchievements]);
 
   const level = getLevel(totalXp);
 
-  // Load initial state from Supabase
-  useEffect(() => {
-    if (!session?.user) {
-      setIsLoaded(true);
-      return;
-    }
-    loadGamificationData();
-  }, [session?.user?.id]);
-
-  const loadGamificationData = async () => {
-    if (!session?.user) return;
-    const userId = session.user.id;
-
-    // Load total_xp from profiles
+  // Load initial state from Supabase — pass userId to avoid stale closure
+  const loadGamificationData = useCallback(async (userId: string) => {
     const { data: profileData } = await supabase
       .from("profiles")
       .select("total_xp")
@@ -90,7 +107,6 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       .single();
     if (profileData) setTotalXp(profileData.total_xp ?? 0);
 
-    // Load quest progress for current periods
     const dailyKey = getDailyPeriodKey();
     const weeklyKey = getWeeklyPeriodKey();
     const { data: progressData } = await supabase
@@ -111,7 +127,6 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       setQuestProgress(map);
     }
 
-    // Load achievements
     const { data: achData } = await supabase
       .from("achievements")
       .select("achievement_key")
@@ -121,17 +136,15 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     }
 
     setIsLoaded(true);
-  };
+  }, []);
 
-  // Listen for log-added events
   useEffect(() => {
-    const handler = () => {
-      if (!session?.user) return;
-      evaluateQuests(allLogs);
-    };
-    window.addEventListener("reptile:log-added", handler);
-    return () => window.removeEventListener("reptile:log-added", handler);
-  }, [session?.user?.id, allLogs]);
+    if (!session?.user) {
+      setIsLoaded(true);
+      return;
+    }
+    loadGamificationData(session.user.id);
+  }, [session?.user?.id, loadGamificationData]);
 
   const grantXp = useCallback(
     async (source: string, sourceKey: string, xpDelta: number) => {
@@ -143,10 +156,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           p_source_key: sourceKey,
           p_xp_delta: xpDelta,
         });
-        if (typeof newXp === "number") {
-          setTotalXp(newXp);
-        }
-        // Fire XP gain event for toast
+        if (typeof newXp === "number") setTotalXp(newXp);
         window.dispatchEvent(new CustomEvent("xp-gain", { detail: { xp: xpDelta } }));
       } catch (e) {
         console.error("grant_xp failed", e);
@@ -173,54 +183,43 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     [session?.user?.id]
   );
 
+  // evaluateQuests reads from refs (not state) to avoid stale closure and dep array bloat
   const evaluateQuests = useCallback(
     async (logs: LogEntry[]) => {
       if (!session?.user || evaluatingRef.current) return;
       evaluatingRef.current = true;
 
       try {
+        const currentQuestProgress = questProgressRef.current;
+        const currentUnlocked = unlockedAchievementsRef.current;
+
+        const today = localDateStr();
         const dailyKey = getDailyPeriodKey();
         const weeklyKey = getWeeklyPeriodKey();
-        const today = new Date().toISOString().split("T")[0];
-        const newProgress: QuestProgressMap = { ...questProgress };
+        const mondayStr = getMondayStr();
 
-        // Helper: count logs for a period
-        const countLogs = (periodStart: string, periodEnd: string, logTypes?: string[]) => {
-          return logs.filter((l) => {
-            const d = l.date.split("T")[0];
-            const inPeriod = d >= periodStart && d <= periodEnd;
-            const typeMatch = !logTypes || logTypes.includes(l.type);
-            return inPeriod && typeMatch;
+        const newProgress: QuestProgressMap = { ...currentQuestProgress };
+
+        // Count logs for a period (uses local dates)
+        const countLogs = (periodStart: string, periodEnd: string, logTypes?: string[]) =>
+          logs.filter((l) => {
+            const d = logLocalDate(l.date);
+            return d >= periodStart && d <= periodEnd && (!logTypes || logTypes.includes(l.type));
           }).length;
-        };
 
-        // Count unique feeding DAYS this week (for weekly_feed_7)
-        const getWeeklyFeedingDays = () => {
-          const monday = new Date();
-          monday.setHours(0, 0, 0, 0);
-          const day = monday.getDay();
-          monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
-          const mondayStr = monday.toISOString().split("T")[0];
-          const feedingDays = new Set(
-            logs
-              .filter((l) => l.type === "feeding" && l.date.split("T")[0] >= mondayStr)
-              .map((l) => l.date.split("T")[0])
-          );
-          return feedingDays.size;
-        };
+        // Count unique feeding days this week
+        const weeklyFeedingDayCount = new Set(
+          logs
+            .filter((l) => l.type === "feeding" && logLocalDate(l.date) >= mondayStr)
+            .map((l) => logLocalDate(l.date))
+        ).size;
 
-        // Evaluate daily quests
+        // Daily quests
         for (const quest of DAILY_QUESTS) {
           const existing = newProgress[quest.key];
           if (existing?.rewarded) continue;
 
-          let count: number;
-          if (quest.key === "daily_any") {
-            count = countLogs(today, today, undefined);
-          } else {
-            count = countLogs(today, today, quest.logTypes);
-          }
-
+          const count = countLogs(today, today, quest.key === "daily_any" ? undefined : quest.logTypes);
           const completed = count >= quest.target;
           newProgress[quest.key] = { progress: count, completed, rewarded: existing?.rewarded ?? false };
 
@@ -231,24 +230,14 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // Evaluate weekly quests
-        const monday = new Date();
-        monday.setHours(0, 0, 0, 0);
-        const day = monday.getDay();
-        monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
-        const mondayStr = monday.toISOString().split("T")[0];
-
+        // Weekly quests
         for (const quest of WEEKLY_QUESTS) {
           const existing = newProgress[quest.key];
           if (existing?.rewarded) continue;
 
-          let count: number;
-          if (quest.key === "weekly_feed_7") {
-            count = getWeeklyFeedingDays();
-          } else {
-            count = countLogs(mondayStr, today, quest.logTypes);
-          }
-
+          const count = quest.key === "weekly_feed_7"
+            ? weeklyFeedingDayCount
+            : countLogs(mondayStr, today, quest.logTypes);
           const completed = count >= quest.target;
           newProgress[quest.key] = { progress: count, completed, rewarded: existing?.rewarded ?? false };
 
@@ -259,22 +248,18 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // Evaluate achievements
+        // Achievements (one-time)
         for (const ach of ACHIEVEMENTS) {
-          if (unlockedAchievements.has(ach.key)) continue;
-
+          if (currentUnlocked.has(ach.key)) continue;
           const totalCount = ach.logTypes
             ? logs.filter((l) => ach.logTypes!.includes(l.type)).length
             : logs.length;
-
           newProgress[ach.key] = {
             progress: Math.min(totalCount, ach.target),
             completed: totalCount >= ach.target,
-            rewarded: unlockedAchievements.has(ach.key),
+            rewarded: currentUnlocked.has(ach.key),
           };
-
           if (totalCount >= ach.target) {
-            // Try to insert achievement (UNIQUE constraint prevents duplicates)
             const { error } = await supabase.from("achievements").insert({
               user_id: session.user.id,
               achievement_key: ach.key,
@@ -288,14 +273,14 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // Evaluate challenges (streak-based)
+        // Challenges (streak-based)
         const streak = getFeedingStreak(logs);
         for (const chal of CHALLENGES) {
-          if (unlockedAchievements.has(chal.key)) continue;
+          if (currentUnlocked.has(chal.key)) continue;
           newProgress[chal.key] = {
             progress: Math.min(streak, chal.target),
             completed: streak >= chal.target,
-            rewarded: unlockedAchievements.has(chal.key),
+            rewarded: currentUnlocked.has(chal.key),
           };
           if (streak >= chal.target) {
             const { error } = await supabase.from("achievements").insert({
@@ -316,22 +301,38 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         evaluatingRef.current = false;
       }
     },
-    [session?.user?.id, questProgress, unlockedAchievements, grantXp, upsertQuestProgress]
+    [session?.user?.id, grantXp, upsertQuestProgress]
+    // intentionally excludes questProgress/unlockedAchievements — read via refs instead
   );
 
-  // Re-evaluate on allLogs change (for initial load and after log refresh)
+  // Stable ref to evaluateQuests for the event listener
+  const evaluateQuestsRef = useRef(evaluateQuests);
+  useEffect(() => { evaluateQuestsRef.current = evaluateQuests; }, [evaluateQuests]);
+
+  // Listen for log-added events (uses ref so listener is only registered once)
+  useEffect(() => {
+    const handler = () => {
+      if (!session?.user) return;
+      // allLogs may not yet reflect the new entry; use a short delay
+      setTimeout(() => evaluateQuestsRef.current(allLogs), 100);
+    };
+    window.addEventListener("reptile:log-added", handler);
+    return () => window.removeEventListener("reptile:log-added", handler);
+  }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-evaluate when allLogs changes (handles initial load)
   useEffect(() => {
     if (isLoaded && session?.user && allLogs.length > 0) {
       evaluateQuests(allLogs);
     }
-  }, [isLoaded, session?.user?.id, allLogs.length]);
+  }, [isLoaded, session?.user?.id, allLogs.length, evaluateQuests]);
 
-  // 3D Model generation
+  // gamification.ts already uses local time for streak calc
+  // but we override it here for safety
   const generate3DModel = useCallback(
     async (reptileId: string, imageUrl: string) => {
       if (!session?.user) return;
 
-      // If imageUrl is a data URI, upload to Supabase first
       let publicImageUrl = imageUrl;
       if (imageUrl.startsWith("data:")) {
         const blob = await fetch(imageUrl).then((r) => r.blob());
@@ -347,7 +348,6 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         publicImageUrl = urlData.publicUrl;
       }
 
-      // Call Meshy API via our proxy route
       const res = await fetch("/api/meshy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -360,8 +360,6 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       }
 
       const taskId = data.result;
-
-      // Save to Supabase
       await supabase.from("reptile_3d_models").upsert(
         {
           reptile_id: reptileId,
@@ -373,51 +371,62 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         },
         { onConflict: "reptile_id" }
       );
-
       setModel3DStatus({ status: "processing", glbUrl: null, thumbnailUrl: null, taskId });
-
-      // Start polling
       startPolling(reptileId, taskId);
     },
-    [session?.user?.id]
+    [session?.user?.id] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const startPolling = useCallback(
     (reptileId: string, taskId: string) => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      pollCountRef.current = 0;
 
       pollIntervalRef.current = setInterval(async () => {
-        const res = await fetch("/api/meshy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "poll", taskId }),
-        });
-        const data = await res.json();
+        pollCountRef.current += 1;
 
-        if (data.status === "SUCCEEDED") {
-          const glbUrl = data.model_urls?.glb ?? null;
-          const thumbnailUrl = data.thumbnail_url ?? null;
-
-          await supabase
-            .from("reptile_3d_models")
-            .update({
-              status: "succeeded",
-              glb_url: glbUrl,
-              thumbnail_url: thumbnailUrl,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("reptile_id", reptileId);
-
-          setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
-          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        } else if (data.status === "FAILED") {
+        // Timeout after MAX_POLL_ATTEMPTS
+        if (pollCountRef.current > MAX_POLL_ATTEMPTS) {
+          clearInterval(pollIntervalRef.current!);
           await supabase
             .from("reptile_3d_models")
             .update({ status: "failed", updated_at: new Date().toISOString() })
             .eq("reptile_id", reptileId);
-
           setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
-          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/meshy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "poll", taskId }),
+          });
+
+          if (!res.ok) return; // retry on non-200
+
+          const data = await res.json();
+
+          if (data.status === "SUCCEEDED") {
+            const glbUrl = data.model_urls?.glb ?? null;
+            const thumbnailUrl = data.thumbnail_url ?? null;
+            await supabase
+              .from("reptile_3d_models")
+              .update({ status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString() })
+              .eq("reptile_id", reptileId);
+            setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
+            clearInterval(pollIntervalRef.current!);
+          } else if (data.status === "FAILED") {
+            await supabase
+              .from("reptile_3d_models")
+              .update({ status: "failed", updated_at: new Date().toISOString() })
+              .eq("reptile_id", reptileId);
+            setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
+            clearInterval(pollIntervalRef.current!);
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+          // Don't clear interval — retry on next tick
         }
       }, 5000);
     },
@@ -441,7 +450,6 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           thumbnailUrl: data.thumbnail_url,
           taskId: data.task_id,
         });
-        // Resume polling if still processing
         if (status === "processing" && data.task_id) {
           startPolling(reptileId, data.task_id);
         }
@@ -450,7 +458,6 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     [session?.user?.id, startPolling]
   );
 
-  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);

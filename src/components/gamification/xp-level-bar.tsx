@@ -50,7 +50,7 @@ export function XPLevelBar() {
           )}
           {unlocks3D && (
             <div className="text-xs" style={{ color: "var(--primary)" }}>
-              ✨ 3D 언락!
+              ✨ {t("gamification.unlock_3d")}
             </div>
           )}
         </div>
@@ -74,7 +74,7 @@ export function XPLevelBar() {
         <div className="mt-2 flex items-center gap-1">
           <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
           <span className="text-xs px-2" style={{ color: "var(--muted)" }}>
-            🦎 레벨 5 달성 시 3D 모델 생성
+            🦎 {t("gamification.creature_placeholder")}
           </span>
           <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
         </div>

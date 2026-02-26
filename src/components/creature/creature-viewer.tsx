@@ -101,7 +101,7 @@ export function CreatureViewer() {
     if (currentReptile?.id) {
       fetchModel3DStatus(currentReptile.id);
     }
-  }, [currentReptile?.id]);
+  }, [currentReptile?.id, fetchModel3DStatus]);
 
   if (!isLoaded) return null;
 
@@ -201,7 +201,7 @@ export function CreatureViewer() {
           className="px-3 pb-3 text-center text-xs"
           style={{ color: "var(--muted)" }}
         >
-          👆 탭하면 놀라고, 문질러주면 간지러워해요!
+          👆 {lang === "ko" ? "탭하면 놀라고, 문질러주면 간지러워해요!" : "Tap to surprise, drag to tickle!"}
         </div>
       )}
     </div>

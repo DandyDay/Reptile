@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect, Suspense } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useRef, useState, useEffect, Suspense, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
 import { useGLTF, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -18,8 +18,8 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
   const [isDragging, setIsDragging] = useState(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Clone scene to allow multiple renders
-  const clonedScene = scene.clone(true);
+  // Memoize clone to avoid expensive re-clone on every render
+  const clonedScene = useMemo(() => scene.clone(true), [scene]);
 
   // Growth scale by level (5 = base, grows slowly)
   const baseScale = 0.8 + Math.max(0, level - 5) * 0.04;

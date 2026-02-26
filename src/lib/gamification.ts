@@ -50,9 +50,9 @@ export function getLevelName(level: number, lang: "ko" | "en"): string {
   return lang === "ko" ? LEVEL_NAMES_KO[idx] : LEVEL_NAMES_EN[idx];
 }
 
-// Period key helpers
+// Period key helpers (use local dates to avoid UTC offset issues)
 export function getDailyPeriodKey(date: Date = new Date()): string {
-  return date.toISOString().split("T")[0]; // '2026-02-26'
+  return localDateStr(date);
 }
 
 export function getWeeklyPeriodKey(date: Date = new Date()): string {
@@ -68,17 +68,25 @@ export function getWeeklyPeriodKey(date: Date = new Date()): string {
   return `${year}-W${String(weekNum).padStart(2, "0")}`;
 }
 
-// Streak calculation
+// Local date string helper (avoids UTC offset issues)
+function localDateStr(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Streak calculation using local dates
 export function getFeedingStreak(allLogs: LogEntry[]): number {
   const feedingDays = new Set(
-    allLogs.filter((l) => l.type === "feeding").map((l) => l.date.split("T")[0])
+    allLogs.filter((l) => l.type === "feeding").map((l) => localDateStr(new Date(l.date)))
   );
   let streak = 0;
   const today = new Date();
   for (let i = 0; i < 100; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const key = d.toISOString().split("T")[0];
+    const key = localDateStr(d);
     if (feedingDays.has(key)) streak++;
     else break;
   }
