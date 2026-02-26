@@ -253,6 +253,9 @@
         "level_up": "레벨 업!",
         "completed": "완료",
         "in_progress": "진행 중",
-        "locked": "잠김"
+        "locked": "잠김",
+        "check_in": "오늘 출석",
+        "streak_info": "설정한 케어 주기에 맞춰 꾸준히 완료한 횟수예요",
+        "schedule_based": "주기 기반"
     }
 }

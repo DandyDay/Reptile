@@ -1,4 +1,4 @@
-import { LogEntry } from "./store";
+import { LogEntry, CareSchedule } from "./store";
 
 export type QuestType = "daily" | "weekly" | "achievement" | "challenge";
 
@@ -50,24 +50,6 @@ export function getLevelName(level: number, lang: "ko" | "en"): string {
   return lang === "ko" ? LEVEL_NAMES_KO[idx] : LEVEL_NAMES_EN[idx];
 }
 
-// Period key helpers (use local dates to avoid UTC offset issues)
-export function getDailyPeriodKey(date: Date = new Date()): string {
-  return localDateStr(date);
-}
-
-export function getWeeklyPeriodKey(date: Date = new Date()): string {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  // Set to Monday of this week
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  const year = d.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const weekNum = Math.ceil(((d.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
-  return `${year}-W${String(weekNum).padStart(2, "0")}`;
-}
-
 // Local date string helper (avoids UTC offset issues)
 function localDateStr(date: Date = new Date()): string {
   const y = date.getFullYear();
@@ -76,25 +58,112 @@ function localDateStr(date: Date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
-// Streak calculation using local dates
-export function getFeedingStreak(allLogs: LogEntry[]): number {
-  const feedingDays = new Set(
-    allLogs.filter((l) => l.type === "feeding").map((l) => localDateStr(new Date(l.date)))
+// Period key helpers (local dates)
+export function getDailyPeriodKey(date: Date = new Date()): string {
+  return localDateStr(date);
+}
+
+export function getWeeklyPeriodKey(date: Date = new Date()): string {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  const year = d.getFullYear();
+  const startOfYear = new Date(year, 0, 1);
+  const weekNum = Math.ceil(
+    ((d.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7
   );
+  return `${year}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+/**
+ * Schedule-aware on-time streak.
+ *
+ * Interval mode (e.g., every 3 days):
+ *   - Counts consecutive care events where the gap to the previous event was
+ *     within (frequencyDays × 1.5) days.  A 50% grace period is given.
+ *   - Default interval when no schedule: 7 days.
+ *
+ * Weekly mode (e.g., every Mon & Thu):
+ *   - Counts consecutive weeks (going backward) where all required days of the
+ *     week have at least one log of the given type.
+ */
+export function getOnScheduleStreak(
+  logs: LogEntry[],
+  logType: "feeding" | "cleaning",
+  careSchedules?: CareSchedule[]
+): number {
+  const schedule = careSchedules?.find((s) => s.type === logType && s.enabled);
+  const typeLogs = logs
+    .filter((l) => l.type === logType)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  if (typeLogs.length === 0) return 0;
+
+  if (schedule?.scheduleMode === "weekly" && schedule.specificDays?.length) {
+    return calcWeeklyScheduleStreak(typeLogs, schedule.specificDays);
+  }
+
+  // Interval mode
+  const intervalDays = schedule?.frequencyDays ?? 7;
+  const maxGapMs = intervalDays * 1.5 * 24 * 60 * 60 * 1000;
+  return calcIntervalStreak(typeLogs, maxGapMs);
+}
+
+function calcIntervalStreak(typeLogs: LogEntry[], maxGapMs: number): number {
+  let streak = 1;
+  for (let i = typeLogs.length - 1; i > 0; i--) {
+    const curr = new Date(typeLogs[i].date).getTime();
+    const prev = new Date(typeLogs[i - 1].date).getTime();
+    if (curr - prev <= maxGapMs) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function calcWeeklyScheduleStreak(typeLogs: LogEntry[], requiredDays: number[]): number {
+  // Map weekKey → set of logged day-of-week values
+  const logsByWeek = new Map<string, Set<number>>();
+  for (const log of typeLogs) {
+    const d = new Date(log.date);
+    const weekKey = getWeeklyPeriodKey(d);
+    if (!logsByWeek.has(weekKey)) logsByWeek.set(weekKey, new Set());
+    logsByWeek.get(weekKey)!.add(d.getDay());
+  }
+
   let streak = 0;
   const today = new Date();
-  for (let i = 0; i < 100; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const key = localDateStr(d);
-    if (feedingDays.has(key)) streak++;
+  for (let i = 0; i < 52; i++) {
+    const weekDate = new Date(today);
+    weekDate.setDate(today.getDate() - i * 7);
+    const weekKey = getWeeklyPeriodKey(weekDate);
+    const loggedDays = logsByWeek.get(weekKey) ?? new Set<number>();
+    const allCovered = requiredDays.every((d) => loggedDays.has(d));
+    if (allCovered) streak++;
     else break;
   }
   return streak;
 }
 
 // Quest definitions
+
 export const DAILY_QUESTS: QuestDef[] = [
+  {
+    key: "daily_open_app",
+    type: "daily",
+    xp: 2,
+    target: 1,
+    logTypes: undefined,
+    labelKo: "오늘 출석",
+    labelEn: "Daily Check-in",
+    descKo: "오늘 앱에 접속했어요!",
+    descEn: "You opened the app today!",
+    icon: "📱",
+  },
   {
     key: "daily_feed",
     type: "daily",
@@ -147,15 +216,15 @@ export const WEEKLY_QUESTS: QuestDef[] = [
     icon: "🧹",
   },
   {
-    key: "weekly_feed_7",
+    key: "weekly_feed_on_time",
     type: "weekly",
-    xp: 100,
-    target: 7,
+    xp: 60,
+    target: 1,
     logTypes: ["feeding"],
-    labelKo: "이번 주 매일 먹이주기",
-    labelEn: "Feed Every Day",
-    descKo: "이번 주 7일 모두 먹이주기를 기록하세요",
-    descEn: "Feed your reptile every day this week",
+    labelKo: "이번 주 먹이 기록",
+    labelEn: "Feed This Week",
+    descKo: "이번 주 먹이주기를 한 번 이상 기록하세요",
+    descEn: "Log at least one feeding this week",
     icon: "📅",
   },
   {
@@ -235,6 +304,11 @@ export const ACHIEVEMENTS: QuestDef[] = [
   },
 ];
 
+/**
+ * Challenges use schedule-aware streaks.
+ * The `target` is the number of consecutive on-time completions required.
+ * Evaluation happens in gamification-store.tsx using getOnScheduleStreak().
+ */
 export const CHALLENGES: QuestDef[] = [
   {
     key: "streak_feed_7",
@@ -242,10 +316,10 @@ export const CHALLENGES: QuestDef[] = [
     xp: 150,
     target: 7,
     logTypes: ["feeding"],
-    labelKo: "7일 연속 먹이주기",
-    labelEn: "7-Day Feeding Streak",
-    descKo: "7일 연속으로 먹이주기를 기록하세요",
-    descEn: "Feed every day for 7 days straight",
+    labelKo: "꾸준한 먹이 7번",
+    labelEn: "7 On-Schedule Feedings",
+    descKo: "설정한 주기에 맞춰 7번 연속으로 먹이주기를 완료하세요",
+    descEn: "Complete 7 consecutive feedings on your set schedule",
     icon: "🔥",
   },
   {
@@ -254,11 +328,23 @@ export const CHALLENGES: QuestDef[] = [
     xp: 500,
     target: 30,
     logTypes: ["feeding"],
-    labelKo: "30일 연속 먹이주기",
-    labelEn: "30-Day Feeding Streak",
-    descKo: "30일 연속으로 먹이주기를 기록하세요",
-    descEn: "Feed every day for 30 days straight",
+    labelKo: "꾸준한 먹이 30번",
+    labelEn: "30 On-Schedule Feedings",
+    descKo: "설정한 주기에 맞춰 30번 연속으로 먹이주기를 완료하세요",
+    descEn: "Complete 30 consecutive feedings on your set schedule",
     icon: "⚡",
+  },
+  {
+    key: "streak_clean_10",
+    type: "challenge",
+    xp: 200,
+    target: 10,
+    logTypes: ["cleaning"],
+    labelKo: "꾸준한 청소 10번",
+    labelEn: "10 On-Schedule Cleanings",
+    descKo: "설정한 주기에 맞춰 10번 연속으로 청소를 완료하세요",
+    descEn: "Complete 10 consecutive cleanings on your set schedule",
+    icon: "🧼",
   },
 ];
 

@@ -252,6 +252,9 @@
         "level_up": "Level Up!",
         "completed": "Completed",
         "in_progress": "In Progress",
-        "locked": "Locked"
+        "locked": "Locked",
+        "check_in": "Daily Check-in",
+        "streak_info": "Consecutive on-time completions based on your care schedule",
+        "schedule_based": "Schedule-based"
     }
 }

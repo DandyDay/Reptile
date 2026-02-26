@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
-import { useReptileLogs, LogEntry } from "./store";
+import { useReptileLogs, LogEntry, Reptile } from "./store";
 import {
   DAILY_QUESTS,
   WEEKLY_QUESTS,
@@ -10,7 +10,7 @@ import {
   CHALLENGES,
   getDailyPeriodKey,
   getWeeklyPeriodKey,
-  getFeedingStreak,
+  getOnScheduleStreak,
   getLevel,
 } from "./gamification";
 
@@ -77,7 +77,9 @@ function logLocalDate(dateStr: string): string {
 }
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
-  const { session, allLogs } = useReptileLogs();
+  const { session, allLogs, currentReptile } = useReptileLogs();
+  const currentReptileRef = useRef<Reptile | null>(null);
+  useEffect(() => { currentReptileRef.current = currentReptile ?? null; }, [currentReptile]);
   const [totalXp, setTotalXp] = useState(0);
   const [questProgress, setQuestProgress] = useState<QuestProgressMap>({});
   const [unlockedAchievements, setUnlockedAchievements] = useState<Set<string>>(new Set());
@@ -133,6 +135,38 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       .eq("user_id", userId);
     if (achData) {
       setUnlockedAchievements(new Set(achData.map((a) => a.achievement_key)));
+    }
+
+    // Auto-grant daily_open_app attendance quest (opening the app = check-in)
+    const todayKey = getDailyPeriodKey();
+    const alreadyCheckedIn = progressData?.some(
+      (p) => p.quest_key === "daily_open_app" && p.period_key === todayKey && p.rewarded_at != null
+    );
+    if (!alreadyCheckedIn) {
+      const openAppXp = 2;
+      // Grant XP directly (avoid circular dep with grantXp callback)
+      const { data: newXp } = await supabase.rpc("grant_xp", {
+        p_user_id: userId,
+        p_source: "quest",
+        p_source_key: "daily_open_app",
+        p_xp_delta: openAppXp,
+      });
+      if (typeof newXp === "number") setTotalXp(newXp);
+      await supabase.from("quest_progress").upsert(
+        {
+          user_id: userId,
+          quest_key: "daily_open_app",
+          period_key: todayKey,
+          progress: 1,
+          completed: true,
+          rewarded_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,quest_key,period_key" }
+      );
+      // Dispatch XP toast after a small delay (so UI is ready)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("xp-gain", { detail: { xp: openAppXp } }));
+      }, 1500);
     }
 
     setIsLoaded(true);
@@ -273,10 +307,21 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           }
         }
 
-        // Challenges (streak-based)
-        const streak = getFeedingStreak(logs);
+        // Challenges — schedule-aware on-time streaks per current reptile
+        const reptile = currentReptileRef.current;
+        // Use only logs for the currently selected reptile for streak calc
+        const reptileLogs = reptile ? logs.filter((l) => l.reptileId === reptile.id) : logs;
+
         for (const chal of CHALLENGES) {
           if (currentUnlocked.has(chal.key)) continue;
+
+          // Determine which logType to streak on
+          const chalLogType = chal.logTypes?.[0] as "feeding" | "cleaning" | undefined;
+          let streak = 0;
+          if (chalLogType === "feeding" || chalLogType === "cleaning") {
+            streak = getOnScheduleStreak(reptileLogs, chalLogType, reptile?.careSchedules);
+          }
+
           newProgress[chal.key] = {
             progress: Math.min(streak, chal.target),
             completed: streak >= chal.target,

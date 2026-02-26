@@ -66,6 +66,18 @@ function QuestRow({
             )}
           </div>
         </div>
+        {quest.type === "challenge" && (
+          <span
+            className="inline-block text-xs px-1.5 py-0.5 rounded mt-0.5 mb-1"
+            style={{
+              background: "color-mix(in srgb, var(--accent), transparent 80%)",
+              color: "var(--accent)",
+              fontSize: "0.65rem",
+            }}
+          >
+            {lang === "ko" ? "🗓 주기 기반" : "🗓 Schedule-based"}
+          </span>
+        )}
         <div className="text-xs mt-0.5 mb-1.5" style={{ color: "var(--muted)" }}>
           {lang === "ko" ? quest.descKo : quest.descEn}
         </div>
