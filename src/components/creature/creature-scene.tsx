@@ -19,11 +19,16 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
   // Drag state
   const isDraggingRef = useRef(false);
   const hasDraggedRef = useRef(false);
-  const lastPointerRef = useRef<{ x: number } | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Physics-based rotation
-  const rotationRef = useRef(0);   // current Y rotation
-  const velocityRef = useRef(0);   // angular velocity (rad/frame)
+  // Physics-based rotation (Y = horizontal drag, X = vertical drag)
+  const rotYRef = useRef(0);
+  const rotXRef = useRef(0);
+  const velYRef = useRef(0);
+  const velXRef = useRef(0);
+
+  // X rotation clamp so it doesn't flip fully (±70°)
+  const X_CLAMP = Math.PI * 0.38;
 
   const clonedScene = useMemo(() => scene.clone(true), [scene]);
   const baseScale = 0.8 + Math.max(0, level - 5) * 0.04;
@@ -40,22 +45,30 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
     const t = state.clock.getElapsedTime();
 
     if (!isDraggingRef.current) {
-      // Apply inertia: velocity decays with friction
-      velocityRef.current *= 0.88;
-      rotationRef.current += velocityRef.current;
+      // Inertia with friction
+      velYRef.current *= 0.88;
+      velXRef.current *= 0.88;
+      rotYRef.current += velYRef.current;
+      // X drifts back toward 0 when not dragging (gravity-like return)
+      rotXRef.current += velXRef.current;
+      rotXRef.current *= 0.96; // gentle spring-back to horizon
     }
 
+    // Clamp X so model doesn't flip
+    rotXRef.current = Math.max(-X_CLAMP, Math.min(X_CLAMP, rotXRef.current));
+
     if (anim === "idle") {
-      // Breathing only — no Y sway that fights rotation
       groupRef.current.position.y = Math.sin(t * 1.2) * 0.04;
-      groupRef.current.rotation.y = rotationRef.current;
+      groupRef.current.rotation.y = rotYRef.current;
+      groupRef.current.rotation.x = rotXRef.current;
       groupRef.current.rotation.z = 0;
       groupRef.current.scale.setScalar(baseScale);
     } else if (anim === "surprised") {
       const progress = ((t * 2) % 2) / 2;
       groupRef.current.position.y = Math.sin(progress * Math.PI) * 0.3;
+      groupRef.current.rotation.y = rotYRef.current;
+      groupRef.current.rotation.x = rotXRef.current;
       groupRef.current.rotation.z = Math.sin(progress * Math.PI * 3) * 0.15;
-      groupRef.current.rotation.y = rotationRef.current;
       groupRef.current.scale.setScalar(baseScale + Math.sin(progress * Math.PI) * 0.15);
     }
   });
@@ -63,30 +76,36 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
   const handlePointerDown = (e: THREE.Event) => {
     isDraggingRef.current = true;
     hasDraggedRef.current = false;
-    velocityRef.current = 0; // kill momentum on grab
+    velYRef.current = 0;
+    velXRef.current = 0;
     const pe = e as unknown as PointerEvent;
-    lastPointerRef.current = { x: pe.clientX };
+    lastPointerRef.current = { x: pe.clientX, y: pe.clientY };
   };
 
   const handlePointerMove = (e: THREE.Event) => {
     if (!isDraggingRef.current || !lastPointerRef.current) return;
     const pe = e as unknown as PointerEvent;
     const dx = pe.clientX - lastPointerRef.current.x;
-    if (Math.abs(dx) > 2) {
+    const dy = pe.clientY - lastPointerRef.current.y;
+
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
       hasDraggedRef.current = true;
-      const delta = dx * 0.009;
-      rotationRef.current += delta;
-      velocityRef.current = delta; // velocity = last frame's delta for momentum
-      lastPointerRef.current = { x: pe.clientX };
+      const deltaY = dx * 0.009;
+      const deltaX = dy * 0.009;
+      rotYRef.current += deltaY;
+      rotXRef.current += deltaX;
+      velYRef.current = deltaY;
+      velXRef.current = deltaX;
+      lastPointerRef.current = { x: pe.clientX, y: pe.clientY };
     }
   };
 
   const handlePointerUp = (e: THREE.Event) => {
     isDraggingRef.current = false;
     lastPointerRef.current = null;
-    // Tap (no significant movement) → surprise
     if (!hasDraggedRef.current && anim !== "surprised") {
-      velocityRef.current = 0;
+      velYRef.current = 0;
+      velXRef.current = 0;
       setAnim("surprised");
       onSurprise();
     }
