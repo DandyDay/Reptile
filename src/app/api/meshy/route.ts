@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const MESHY_API_KEY = process.env.MESHY_API_KEY;
-const MESHY_BASE = "https://api.meshy.ai/openapi/v2/image-to-3d";
+const MESHY_BASE = "https://api.meshy.ai/openapi/v1/image-to-3d";
 
 const ALLOWED_IMAGE_DOMAINS = ["supabase.co", "supabase.in"];
 
