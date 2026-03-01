@@ -511,9 +511,37 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     };
 
     es.onerror = async () => {
-      console.error("SSE stream error for task", taskId);
+      console.warn("SSE stream closed for task", taskId, "— checking actual status...");
       es.close();
-      // Mark as failed if we get an unrecoverable stream error
+      // Don't immediately mark failed — the task may have already succeeded on Meshy's end.
+      // Do a final GET to check the real status.
+      try {
+        const res = await fetch("/api/meshy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "poll", taskId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "SUCCEEDED") {
+            const glbUrl = data.model_urls?.glb ?? null;
+            const thumbnailUrl = data.thumbnail_url ?? null;
+            await supabase.from("reptile_3d_models").update({
+              status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
+            }).eq("reptile_id", reptileId);
+            setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
+            return;
+          } else if (data.status === "IN_PROGRESS" || data.status === "PENDING") {
+            // Still running — restart the stream
+            console.log("Task still in progress, restarting stream...");
+            startStreaming(reptileId, taskId);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("SSE fallback poll failed:", err);
+      }
+      // Only mark failed if poll confirms FAILED or poll itself errored
       await supabase.from("reptile_3d_models").update({
         status: "failed", updated_at: new Date().toISOString(),
       }).eq("reptile_id", reptileId);
