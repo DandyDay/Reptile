@@ -187,6 +187,8 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
     const [foodPresets, setFoodPresets] = useState<FoodPreset[]>([]);
     const [hasMigrated, setHasMigrated] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
+    const notificationsRef = React.useRef<Notification[]>([]);
+    React.useEffect(() => { notificationsRef.current = notifications; }, [notifications]);
 
     // ... existing visualSettings state ...
     const [visualSettings, setVisualSettings] = useState({
@@ -362,10 +364,10 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                             // Check for duplicate (Check if we already notified about this specific status today)
                             // We use content check to allow "overdue" notification to fire if it wasn't fired today
                             // But usually, we only want one notification per type per day
-                            const alreadyExists = notifications.some(n =>
+                            const alreadyExists = notificationsRef.current.some(n =>
                                 n.type === 'care_reminder' &&
                                 n.relatedId === reptile.id &&
-                                n.content.includes(taskName) && // Fuzzy match type
+                                n.content.includes(taskName) &&
                                 new Date(n.createdAt).toDateString() === today.toDateString()
                             );
 
@@ -396,7 +398,9 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
         };
 
         checkDailyReminders();
-    }, [isLoaded, session, reptiles, logs, notifications]);
+    // notifications는 notificationsRef로 읽으므로 deps 제외 (루프 방지)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoaded, session?.user?.id, reptiles.length, logs.length]);
 
     // Fetch initial notifications
     useEffect(() => {
@@ -428,7 +432,7 @@ export function ReptileProvider({ children }: { children: React.ReactNode }) {
                 supabase.removeChannel(output);
             };
         }
-    }, [session]);
+    }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ... existing useEffect for fetching data ...
 
