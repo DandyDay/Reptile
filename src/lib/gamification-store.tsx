@@ -87,9 +87,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const unlockedAchievementsRef = useRef<Set<string>>(new Set());
   const currentReptileRef = useRef<Reptile | null>(null);
   const evaluatingRef = useRef(false);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const pollCountRef = useRef(0);
-  const MAX_POLL_ATTEMPTS = 120;
+  const eventSourceRef = useRef<EventSource | null>(null);
   const prevReptileIdRef = useRef<string | null>(null);
 
   // Keep refs in sync
@@ -479,39 +477,48 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         { onConflict: "reptile_id" }
       );
       setModel3DStatus({ status: "processing", glbUrl: null, thumbnailUrl: null, taskId });
-      startPolling(reptileId, taskId);
+      startStreaming(reptileId, taskId);
     },
     [session?.user?.id] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const startPolling = useCallback((reptileId: string, taskId: string) => {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    pollCountRef.current = 0;
-    pollIntervalRef.current = setInterval(async () => {
-      pollCountRef.current += 1;
-      if (pollCountRef.current > MAX_POLL_ATTEMPTS) {
-        clearInterval(pollIntervalRef.current!);
-        await supabase.from("reptile_3d_models").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reptile_id", reptileId);
-        setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
-        return;
-      }
+  const startStreaming = useCallback((reptileId: string, taskId: string) => {
+    // Close any existing stream
+    if (eventSourceRef.current) eventSourceRef.current.close();
+
+    const es = new EventSource(`/api/meshy/stream/${encodeURIComponent(taskId)}`);
+    eventSourceRef.current = es;
+
+    es.onmessage = async (event) => {
       try {
-        const res = await fetch("/api/meshy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "poll", taskId }) });
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = JSON.parse(event.data);
         if (data.status === "SUCCEEDED") {
           const glbUrl = data.model_urls?.glb ?? null;
           const thumbnailUrl = data.thumbnail_url ?? null;
-          await supabase.from("reptile_3d_models").update({ status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString() }).eq("reptile_id", reptileId);
+          await supabase.from("reptile_3d_models").update({
+            status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
+          }).eq("reptile_id", reptileId);
           setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
-          clearInterval(pollIntervalRef.current!);
+          es.close();
         } else if (data.status === "FAILED") {
-          await supabase.from("reptile_3d_models").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reptile_id", reptileId);
+          await supabase.from("reptile_3d_models").update({
+            status: "failed", updated_at: new Date().toISOString(),
+          }).eq("reptile_id", reptileId);
           setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
-          clearInterval(pollIntervalRef.current!);
+          es.close();
         }
-      } catch (err) { console.error("Polling error:", err); }
-    }, 5000);
+      } catch (err) { console.error("SSE parse error:", err); }
+    };
+
+    es.onerror = async () => {
+      console.error("SSE stream error for task", taskId);
+      es.close();
+      // Mark as failed if we get an unrecoverable stream error
+      await supabase.from("reptile_3d_models").update({
+        status: "failed", updated_at: new Date().toISOString(),
+      }).eq("reptile_id", reptileId);
+      setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
+    };
   }, []);
 
   const fetchModel3DStatus = useCallback(async (reptileId: string) => {
@@ -520,11 +527,11 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     if (data) {
       const status = data.status as Model3DStatus["status"];
       setModel3DStatus({ status, glbUrl: data.glb_url, thumbnailUrl: data.thumbnail_url, taskId: data.task_id });
-      if (status === "processing" && data.task_id) startPolling(reptileId, data.task_id);
+      if (status === "processing" && data.task_id) startStreaming(reptileId, data.task_id);
     }
-  }, [session?.user?.id, startPolling]);
+  }, [session?.user?.id, startStreaming]);
 
-  useEffect(() => () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); }, []);
+  useEffect(() => () => { if (eventSourceRef.current) eventSourceRef.current.close(); }, []);
 
   return (
     <GamificationContext.Provider value={{ totalXp, level, questProgress, unlockedAchievements, model3DStatus, isLoaded, generate3DModel, fetchModel3DStatus }}>
