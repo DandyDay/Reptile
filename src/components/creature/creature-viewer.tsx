@@ -265,7 +265,8 @@ export function CreatureViewer() {
 
   if (!isLoaded) return null;
 
-  const glbUrl = model3DStatus?.status === "succeeded" ? model3DStatus.glbUrl : null;
+  const rawGlbUrl = model3DStatus?.status === "succeeded" ? model3DStatus.glbUrl : null;
+  const glbUrl = rawGlbUrl ? `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}` : null;
   const hasModel = !!glbUrl;
   const canGenerate = level >= UNLOCK_3D_LEVEL && !hasModel;
 
