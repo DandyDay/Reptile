@@ -216,12 +216,22 @@ export function CreatureViewer() {
   const [showSurprise, setShowSurprise] = useState(false);
   const [surpriseReaction, setSurpriseReaction] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
 
   useEffect(() => {
     if (currentReptile?.id) {
       fetchModel3DStatus(currentReptile.id);
     }
   }, [currentReptile?.id, fetchModel3DStatus]);
+
+  // Reset loading state whenever the active GLB URL changes
+  const prevGlbRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (glbUrl && glbUrl !== prevGlbRef.current) {
+      setModelLoading(true);
+      prevGlbRef.current = glbUrl;
+    }
+  });
 
   if (!isLoaded) return null;
 
@@ -291,12 +301,35 @@ export function CreatureViewer() {
         {level >= UNLOCK_3D_LEVEL ? (
           <>
             {hasModel ? (
-              <Canvas
-                camera={{ position: [0, 0, 2.5], fov: 50 }}
-                style={{ background: "transparent", cursor: "grab" }}
-              >
-                <CreatureScene glbUrl={glbUrl} level={level} onSurprise={handleSurprise} />
-              </Canvas>
+              <div className="relative w-full h-full">
+                <Canvas
+                  camera={{ position: [0, 0, 2.5], fov: 50 }}
+                  style={{ background: "transparent", cursor: modelLoading ? "default" : "grab" }}
+                >
+                  <CreatureScene glbUrl={glbUrl} level={level} onSurprise={handleSurprise} onLoad={() => setModelLoading(false)} />
+                </Canvas>
+                <AnimatePresence>
+                  {modelLoading && (
+                    <motion.div
+                      initial={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none"
+                      style={{ background: "var(--card)" }}
+                    >
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                        className="w-8 h-8 rounded-full border-[3px]"
+                        style={{ borderColor: "var(--border)", borderTopColor: "var(--primary)" }}
+                      />
+                      <span className="text-xs" style={{ color: "var(--muted)" }}>
+                        {lang === "ko" ? "3D 모델 불러오는 중..." : "Loading 3D model..."}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             ) : isProcessing ? (
               <div className="flex flex-col items-center justify-center h-full gap-3">
                 <motion.div

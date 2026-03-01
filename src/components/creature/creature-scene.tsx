@@ -9,9 +9,10 @@ interface CreatureModelProps {
   url: string;
   level: number;
   onSurprise: () => void;
+  onLoad?: () => void;
 }
 
-function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
+function CreatureModel({ url, level, onSurprise, onLoad }: CreatureModelProps) {
   const { scene } = useGLTF(url);
   const groupRef = useRef<THREE.Group>(null);
   const [anim, setAnim] = useState<"idle" | "surprised">("idle");
@@ -32,6 +33,9 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
 
   const clonedScene = useMemo(() => scene.clone(true), [scene]);
   const baseScale = 0.8 + Math.max(0, level - 5) * 0.04;
+
+  // Notify parent when model is ready
+  useEffect(() => { onLoad?.(); }, [onLoad]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (anim === "surprised") {
@@ -161,22 +165,22 @@ export function CreatureScene({
   glbUrl,
   level,
   onSurprise,
+  onLoad,
 }: {
   glbUrl: string | null;
   level: number;
   onSurprise: () => void;
+  onLoad?: () => void;
 }) {
   return (
     <>
       <ambientLight intensity={0.6} />
       <directionalLight position={[5, 5, 5]} intensity={1.2} castShadow />
       <Environment preset="city" />
-      <Suspense fallback={<PlaceholderEgg level={level} />}>
+      <Suspense fallback={null}>
         {glbUrl ? (
-          <CreatureModel url={glbUrl} level={level} onSurprise={onSurprise} />
-        ) : (
-          <PlaceholderEgg level={level} />
-        )}
+          <CreatureModel url={glbUrl} level={level} onSurprise={onSurprise} onLoad={onLoad} />
+        ) : null}
       </Suspense>
     </>
   );
