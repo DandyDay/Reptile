@@ -466,6 +466,11 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create", imageUrl: publicImageUrl }),
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Meshy API error", res.status, text);
+        return;
+      }
       const data = await res.json();
       if (!data.result) { console.error("Meshy API error", data); return; }
       const taskId = data.result;

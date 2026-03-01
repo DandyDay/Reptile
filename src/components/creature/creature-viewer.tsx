@@ -70,7 +70,7 @@ function Generate3DModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-[100] flex items-end justify-center"
       style={{ background: "rgba(0,0,0,0.5)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -79,8 +79,8 @@ function Generate3DModal({
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 300 }}
-        className="w-full max-w-lg rounded-t-3xl pb-safe"
-        style={{ background: "var(--card)", maxHeight: "90vh", overflowY: "auto" }}
+        className="w-full max-w-lg rounded-t-3xl"
+        style={{ background: "var(--card)", maxHeight: "90vh", overflowY: "auto", paddingBottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
