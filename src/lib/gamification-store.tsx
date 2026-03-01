@@ -25,20 +25,25 @@ export interface QuestProgressEntry {
 export type QuestProgressMap = Record<string, QuestProgressEntry>;
 
 export interface Model3DStatus {
+  slot: number;
   status: "pending" | "processing" | "succeeded" | "failed";
   glbUrl: string | null;
   thumbnailUrl: string | null;
   taskId: string | null;
 }
 
+export const MAX_MODEL_SLOTS = 3;
+
 interface GamificationContextType {
   totalXp: number;   // Current reptile's XP
   level: number;     // Current reptile's level
   questProgress: QuestProgressMap;
   unlockedAchievements: Set<string>;
-  model3DStatus: Model3DStatus | null;
+  models3D: Model3DStatus[];
+  activeSlot: number;
+  setActiveSlot: (slot: number) => void;
   isLoaded: boolean;
-  generate3DModel: (reptileId: string, imageUrl: string) => Promise<void>;
+  generate3DModel: (reptileId: string, imageUrl: string, slot: number) => Promise<void>;
   fetchModel3DStatus: (reptileId: string) => Promise<void>;
 }
 
@@ -47,7 +52,9 @@ const GamificationContext = createContext<GamificationContextType>({
   level: 1,
   questProgress: {},
   unlockedAchievements: new Set(),
-  model3DStatus: null,
+  models3D: [],
+  activeSlot: 1,
+  setActiveSlot: () => {},
   isLoaded: false,
   generate3DModel: async () => {},
   fetchModel3DStatus: async () => {},
@@ -80,14 +87,15 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const [totalXp, setTotalXp] = useState(0);
   const [questProgress, setQuestProgress] = useState<QuestProgressMap>({});
   const [unlockedAchievements, setUnlockedAchievements] = useState<Set<string>>(new Set());
-  const [model3DStatus, setModel3DStatus] = useState<Model3DStatus | null>(null);
+  const [models3D, setModels3D] = useState<Model3DStatus[]>([]);
+  const [activeSlot, setActiveSlot] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const questProgressRef = useRef<QuestProgressMap>({});
   const unlockedAchievementsRef = useRef<Set<string>>(new Set());
   const currentReptileRef = useRef<Reptile | null>(null);
   const evaluatingRef = useRef(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const eventSourcesRef = useRef<Map<number, EventSource>>(new Map());
   const prevReptileIdRef = useRef<string | null>(null);
 
   // Keep refs in sync
@@ -444,14 +452,84 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     }
   }, [isLoaded, session?.user?.id, allLogs.length, evaluateQuests]);
 
+  const startStreaming = useCallback((reptileId: string, taskId: string, slot: number) => {
+    // Close any existing stream for this slot
+    const existing = eventSourcesRef.current.get(slot);
+    if (existing) existing.close();
+
+    const es = new EventSource(`/api/meshy/stream/${encodeURIComponent(taskId)}`);
+    eventSourcesRef.current.set(slot, es);
+
+    const updateSlot = (patch: Partial<Model3DStatus>) =>
+      setModels3D((prev) => prev.map((m) => m.slot === slot ? { ...m, ...patch } : m));
+
+    es.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.status === "SUCCEEDED") {
+          const glbUrl = data.model_urls?.glb ?? null;
+          const thumbnailUrl = data.thumbnail_url ?? null;
+          await supabase.from("reptile_3d_models").update({
+            status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
+          }).eq("reptile_id", reptileId).eq("slot", slot);
+          updateSlot({ status: "succeeded", glbUrl, thumbnailUrl });
+          es.close();
+          eventSourcesRef.current.delete(slot);
+        } else if (data.status === "FAILED") {
+          await supabase.from("reptile_3d_models").update({
+            status: "failed", updated_at: new Date().toISOString(),
+          }).eq("reptile_id", reptileId).eq("slot", slot);
+          updateSlot({ status: "failed", glbUrl: null, thumbnailUrl: null });
+          es.close();
+          eventSourcesRef.current.delete(slot);
+        }
+      } catch (err) { console.error("SSE parse error:", err); }
+    };
+
+    es.onerror = async () => {
+      console.warn("SSE stream closed for task", taskId, "slot", slot, "— checking actual status...");
+      es.close();
+      eventSourcesRef.current.delete(slot);
+      try {
+        const res = await fetch("/api/meshy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "poll", taskId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "SUCCEEDED") {
+            const glbUrl = data.model_urls?.glb ?? null;
+            const thumbnailUrl = data.thumbnail_url ?? null;
+            await supabase.from("reptile_3d_models").update({
+              status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
+            }).eq("reptile_id", reptileId).eq("slot", slot);
+            updateSlot({ status: "succeeded", glbUrl, thumbnailUrl });
+            return;
+          } else if (data.status === "IN_PROGRESS" || data.status === "PENDING") {
+            console.log("Task still in progress, restarting stream for slot", slot);
+            startStreaming(reptileId, taskId, slot);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("SSE fallback poll failed:", err);
+      }
+      await supabase.from("reptile_3d_models").update({
+        status: "failed", updated_at: new Date().toISOString(),
+      }).eq("reptile_id", reptileId).eq("slot", slot);
+      updateSlot({ status: "failed", glbUrl: null, thumbnailUrl: null });
+    };
+  }, []);
+
   // 3D model generation
   const generate3DModel = useCallback(
-    async (reptileId: string, imageUrl: string) => {
+    async (reptileId: string, imageUrl: string, slot: number) => {
       if (!session?.user) return;
       let publicImageUrl = imageUrl;
       if (imageUrl.startsWith("data:")) {
         const blob = await fetch(imageUrl).then((r) => r.blob());
-        const fileName = `${session.user.id}/${reptileId}-3d-source.jpg`;
+        const fileName = `${session.user.id}/${reptileId}-3d-slot${slot}-source.jpg`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(fileName, blob, { upsert: true });
@@ -473,96 +551,42 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       if (!data.result) { console.error("Meshy API error", data); return; }
       const taskId = data.result;
       await supabase.from("reptile_3d_models").upsert(
-        { reptile_id: reptileId, user_id: session.user.id, task_id: taskId, status: "processing", source_image_url: publicImageUrl, updated_at: new Date().toISOString() },
-        { onConflict: "reptile_id" }
+        { reptile_id: reptileId, user_id: session.user.id, task_id: taskId, slot, status: "processing", source_image_url: publicImageUrl, updated_at: new Date().toISOString() },
+        { onConflict: "reptile_id,slot" }
       );
-      setModel3DStatus({ status: "processing", glbUrl: null, thumbnailUrl: null, taskId });
-      startStreaming(reptileId, taskId);
+      setModels3D((prev) => {
+        const filtered = prev.filter((m) => m.slot !== slot);
+        return [...filtered, { slot, status: "processing", glbUrl: null, thumbnailUrl: null, taskId }];
+      });
+      startStreaming(reptileId, taskId, slot);
     },
-    [session?.user?.id] // eslint-disable-line react-hooks/exhaustive-deps
+    [session?.user?.id, startStreaming]
   );
-
-  const startStreaming = useCallback((reptileId: string, taskId: string) => {
-    // Close any existing stream
-    if (eventSourceRef.current) eventSourceRef.current.close();
-
-    const es = new EventSource(`/api/meshy/stream/${encodeURIComponent(taskId)}`);
-    eventSourceRef.current = es;
-
-    es.onmessage = async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.status === "SUCCEEDED") {
-          const glbUrl = data.model_urls?.glb ?? null;
-          const thumbnailUrl = data.thumbnail_url ?? null;
-          await supabase.from("reptile_3d_models").update({
-            status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
-          }).eq("reptile_id", reptileId);
-          setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
-          es.close();
-        } else if (data.status === "FAILED") {
-          await supabase.from("reptile_3d_models").update({
-            status: "failed", updated_at: new Date().toISOString(),
-          }).eq("reptile_id", reptileId);
-          setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
-          es.close();
-        }
-      } catch (err) { console.error("SSE parse error:", err); }
-    };
-
-    es.onerror = async () => {
-      console.warn("SSE stream closed for task", taskId, "— checking actual status...");
-      es.close();
-      // Don't immediately mark failed — the task may have already succeeded on Meshy's end.
-      // Do a final GET to check the real status.
-      try {
-        const res = await fetch("/api/meshy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "poll", taskId }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === "SUCCEEDED") {
-            const glbUrl = data.model_urls?.glb ?? null;
-            const thumbnailUrl = data.thumbnail_url ?? null;
-            await supabase.from("reptile_3d_models").update({
-              status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
-            }).eq("reptile_id", reptileId);
-            setModel3DStatus({ status: "succeeded", glbUrl, thumbnailUrl, taskId });
-            return;
-          } else if (data.status === "IN_PROGRESS" || data.status === "PENDING") {
-            // Still running — restart the stream
-            console.log("Task still in progress, restarting stream...");
-            startStreaming(reptileId, taskId);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error("SSE fallback poll failed:", err);
-      }
-      // Only mark failed if poll confirms FAILED or poll itself errored
-      await supabase.from("reptile_3d_models").update({
-        status: "failed", updated_at: new Date().toISOString(),
-      }).eq("reptile_id", reptileId);
-      setModel3DStatus({ status: "failed", glbUrl: null, thumbnailUrl: null, taskId });
-    };
-  }, []);
 
   const fetchModel3DStatus = useCallback(async (reptileId: string) => {
     if (!session?.user) return;
-    const { data } = await supabase.from("reptile_3d_models").select("*").eq("reptile_id", reptileId).maybeSingle();
-    if (data) {
-      const status = data.status as Model3DStatus["status"];
-      setModel3DStatus({ status, glbUrl: data.glb_url, thumbnailUrl: data.thumbnail_url, taskId: data.task_id });
-      if (status === "processing" && data.task_id) startStreaming(reptileId, data.task_id);
+    const { data } = await supabase.from("reptile_3d_models").select("*").eq("reptile_id", reptileId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const statuses: Model3DStatus[] = (data ?? []).map((row: any) => ({
+      slot: row.slot ?? 1,
+      status: row.status as Model3DStatus["status"],
+      glbUrl: row.glb_url,
+      thumbnailUrl: row.thumbnail_url,
+      taskId: row.task_id,
+    }));
+    setModels3D(statuses);
+    for (const m of statuses) {
+      if (m.status === "processing" && m.taskId) startStreaming(reptileId, m.taskId, m.slot);
     }
   }, [session?.user?.id, startStreaming]);
 
-  useEffect(() => () => { if (eventSourceRef.current) eventSourceRef.current.close(); }, []);
+  useEffect(() => () => {
+    eventSourcesRef.current.forEach((es) => es.close());
+    eventSourcesRef.current.clear();
+  }, []);
 
   return (
-    <GamificationContext.Provider value={{ totalXp, level, questProgress, unlockedAchievements, model3DStatus, isLoaded, generate3DModel, fetchModel3DStatus }}>
+    <GamificationContext.Provider value={{ totalXp, level, questProgress, unlockedAchievements, models3D, activeSlot, setActiveSlot, isLoaded, generate3DModel, fetchModel3DStatus }}>
       {children}
     </GamificationContext.Provider>
   );

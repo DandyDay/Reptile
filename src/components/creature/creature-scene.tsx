@@ -14,9 +14,11 @@ interface CreatureModelProps {
 function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
   const { scene } = useGLTF(url);
   const groupRef = useRef<THREE.Group>(null);
-  const [anim, setAnim] = useState<"idle" | "surprised" | "tickle">("idle");
-  const [isDragging, setIsDragging] = useState(false);
+  const [anim, setAnim] = useState<"idle" | "surprised">("idle");
+  const isDraggingRef = useRef(false);
+  const hasDraggedRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const userRotationRef = useRef(0); // accumulated Y rotation from drag
 
   // Memoize clone to avoid expensive re-clone on every render
   const clonedScene = useMemo(() => scene.clone(true), [scene]);
@@ -29,10 +31,6 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
       const t = setTimeout(() => setAnim("idle"), 800);
       return () => clearTimeout(t);
     }
-    if (anim === "tickle") {
-      const t = setTimeout(() => setAnim("idle"), 1200);
-      return () => clearTimeout(t);
-    }
   }, [anim]);
 
   useFrame((state) => {
@@ -40,57 +38,58 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
     const t = state.clock.getElapsedTime();
 
     if (anim === "idle") {
-      // Gentle breathing
       groupRef.current.position.y = Math.sin(t * 1.2) * 0.04;
-      groupRef.current.rotation.y = Math.sin(t * 0.4) * 0.08;
+      // Idle gentle sway + user drag rotation
+      groupRef.current.rotation.y = userRotationRef.current + Math.sin(t * 0.4) * 0.08;
       groupRef.current.scale.setScalar(baseScale);
     } else if (anim === "surprised") {
-      // Jump back and scale pulse
       const progress = ((t * 2) % 2) / 2;
       groupRef.current.position.y = Math.sin(progress * Math.PI) * 0.3;
       groupRef.current.rotation.z = Math.sin(progress * Math.PI * 3) * 0.15;
+      groupRef.current.rotation.y = userRotationRef.current;
       const scalePulse = baseScale + Math.sin(progress * Math.PI) * 0.15;
       groupRef.current.scale.setScalar(scalePulse);
-    } else if (anim === "tickle") {
-      // Fast wiggle
-      groupRef.current.rotation.z = Math.sin(t * 15) * 0.25;
-      groupRef.current.position.y = Math.abs(Math.sin(t * 10)) * 0.05;
-      groupRef.current.scale.setScalar(baseScale);
     }
   });
 
-  const handleClick = () => {
-    setAnim("surprised");
-    onSurprise();
-  };
-
   const handlePointerDown = (e: THREE.Event) => {
-    setIsDragging(true);
+    isDraggingRef.current = true;
+    hasDraggedRef.current = false;
     const pe = e as unknown as PointerEvent;
     lastPointerRef.current = { x: pe.clientX, y: pe.clientY };
+    (e as unknown as PointerEvent).currentTarget &&
+      (e as unknown as { target: Element }).target instanceof Element &&
+      (e as unknown as { target: Element }).target.setPointerCapture?.((pe as PointerEvent).pointerId);
   };
 
   const handlePointerMove = (e: THREE.Event) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current || !lastPointerRef.current) return;
     const pe = e as unknown as PointerEvent;
-    if (lastPointerRef.current) {
-      const dx = Math.abs(pe.clientX - lastPointerRef.current.x);
-      const dy = Math.abs(pe.clientY - lastPointerRef.current.y);
-      if (dx + dy > 10 && anim !== "surprised") {
-        setAnim("tickle");
-      }
+    const dx = pe.clientX - lastPointerRef.current.x;
+    if (Math.abs(dx) > 3) {
+      hasDraggedRef.current = true;
+      userRotationRef.current += dx * 0.01;
+      lastPointerRef.current = { x: pe.clientX, y: pe.clientY };
     }
   };
 
-  const handlePointerUp = () => {
-    setIsDragging(false);
+  const handlePointerUp = (e: THREE.Event) => {
+    isDraggingRef.current = false;
+    // If barely moved → treat as tap → surprised
+    if (!hasDraggedRef.current && anim !== "surprised") {
+      setAnim("surprised");
+      onSurprise();
+    }
     lastPointerRef.current = null;
+    hasDraggedRef.current = false;
+    const pe = e as unknown as PointerEvent;
+    (e as unknown as { target: Element }).target instanceof Element &&
+      (e as unknown as { target: Element }).target.releasePointerCapture?.((pe as PointerEvent).pointerId);
   };
 
   return (
     <group
       ref={groupRef}
-      onClick={handleClick}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

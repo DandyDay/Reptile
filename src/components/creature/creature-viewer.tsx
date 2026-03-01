@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useGamification } from "@/lib/gamification-store";
+import { useGamification, MAX_MODEL_SLOTS } from "@/lib/gamification-store";
 import { getLevel, UNLOCK_3D_LEVEL, getLevelName } from "@/lib/gamification";
 import { useReptileLogs } from "@/lib/store";
 import { useTranslation } from "@/lib/i18n";
@@ -29,9 +29,11 @@ function isRealPhoto(url: string | undefined): boolean {
 
 function Generate3DModal({
   reptileId,
+  slot,
   onClose,
 }: {
   reptileId: string;
+  slot: number;
   onClose: () => void;
 }) {
   const { generate3DModel } = useGamification();
@@ -56,7 +58,7 @@ function Generate3DModal({
   const handleGenerate = async () => {
     if (!selectedPhoto) return;
     setGenerating(true);
-    await generate3DModel(reptileId, selectedPhoto);
+    await generate3DModel(reptileId, selectedPhoto, slot);
     setGenerating(false);
     onClose();
   };
@@ -82,18 +84,15 @@ function Generate3DModal({
         className="w-full max-w-lg rounded-t-3xl"
         style={{ background: "var(--card)", maxHeight: "90vh", overflowY: "auto", paddingBottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}
       >
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full" style={{ background: "var(--border)" }} />
         </div>
 
         <div className="px-5 pb-8 pt-2">
-          {/* Title */}
           <h2 className="text-base font-bold mb-4" style={{ color: "var(--text)" }}>
-            ✨ {t("gamification.guide_title")}
+            ✨ {t("gamification.guide_title")} <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>#{slot}</span>
           </h2>
 
-          {/* Tips */}
           <div
             className="rounded-2xl p-3 mb-4"
             style={{ background: "color-mix(in srgb, var(--primary), transparent 90%)", border: "1px solid color-mix(in srgb, var(--primary), transparent 75%)" }}
@@ -111,12 +110,10 @@ function Generate3DModal({
             </div>
           </div>
 
-          {/* Photo selection */}
           <p className="text-xs font-semibold mb-2" style={{ color: "var(--muted)" }}>
             {t("gamification.guide_select_photo")}
           </p>
           <div className="flex gap-2 mb-4">
-            {/* Use profile photo */}
             <button
               onClick={() => setSelectedPhoto(profilePhoto)}
               disabled={!profilePhoto}
@@ -137,7 +134,6 @@ function Generate3DModal({
               <span>{profilePhoto ? t("gamification.guide_use_profile") : t("gamification.guide_no_profile_photo")}</span>
             </button>
 
-            {/* Upload new photo */}
             <button
               onClick={() => fileInputRef.current?.click()}
               className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all"
@@ -164,7 +160,6 @@ function Generate3DModal({
             onChange={handleFileChange}
           />
 
-          {/* Generate button */}
           <button
             onClick={handleGenerate}
             disabled={!selectedPhoto || generating}
@@ -191,71 +186,15 @@ function Generate3DModal({
   );
 }
 
-function Generate3DButton({ reptileId }: { reptileId: string }) {
-  const { model3DStatus } = useGamification();
-  const { t } = useTranslation();
-  const [showModal, setShowModal] = useState(false);
-
-  if (model3DStatus?.status === "processing") {
-    return (
-      <div className="text-center py-4">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: "var(--background)", color: "var(--text)" }}>
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-            className="w-4 h-4 rounded-full border-2"
-            style={{ borderColor: "var(--primary)", borderTopColor: "transparent" }}
-          />
-          {t("gamification.model_processing")}
-        </div>
-      </div>
-    );
-  }
-
-  if (model3DStatus?.status === "failed") {
-    return (
-      <div className="text-center py-3">
-        <p className="text-sm mb-2" style={{ color: "var(--danger)" }}>
-          {t("gamification.model_failed")}
-        </p>
-        <button
-          onClick={() => setShowModal(true)}
-          className="px-4 py-2 rounded-xl text-sm font-semibold"
-          style={{ background: "var(--primary)", color: "var(--background)" }}
-        >
-          {t("gamification.generate_3d")}
-        </button>
-        <AnimatePresence>
-          {showModal && <Generate3DModal reptileId={reptileId} onClose={() => setShowModal(false)} />}
-        </AnimatePresence>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <button
-        onClick={() => setShowModal(true)}
-        className="w-full py-3 rounded-xl text-sm font-semibold transition-all active:scale-95"
-        style={{ background: "var(--primary)", color: "var(--background)" }}
-      >
-        ✨ {t("gamification.generate_3d")}
-      </button>
-      <AnimatePresence>
-        {showModal && <Generate3DModal reptileId={reptileId} onClose={() => setShowModal(false)} />}
-      </AnimatePresence>
-    </>
-  );
-}
-
 export function CreatureViewer() {
-  const { totalXp, model3DStatus, fetchModel3DStatus, isLoaded } = useGamification();
+  const { totalXp, models3D, activeSlot, setActiveSlot, fetchModel3DStatus, isLoaded } = useGamification();
   const { currentReptile } = useReptileLogs();
   const { t, lang } = useTranslation();
   const level = getLevel(totalXp);
   const levelName = getLevelName(level, lang);
   const [showSurprise, setShowSurprise] = useState(false);
   const [surpriseReaction, setSurpriseReaction] = useState("");
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (currentReptile?.id) {
@@ -265,10 +204,14 @@ export function CreatureViewer() {
 
   if (!isLoaded) return null;
 
-  const rawGlbUrl = model3DStatus?.status === "succeeded" ? model3DStatus.glbUrl : null;
+  const activeModel = models3D.find((m) => m.slot === activeSlot) ?? null;
+  const rawGlbUrl = activeModel?.status === "succeeded" ? activeModel.glbUrl : null;
   const glbUrl = rawGlbUrl ? `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}` : null;
   const hasModel = !!glbUrl;
-  const canGenerate = level >= UNLOCK_3D_LEVEL && !hasModel;
+  const isProcessing = activeModel?.status === "processing";
+  const isFailed = activeModel?.status === "failed";
+  const isEmpty = !activeModel;
+  const canGenerate = level >= UNLOCK_3D_LEVEL && (isEmpty || isFailed);
 
   const handleSurprise = () => {
     const reactions = ["!", "!!", "😱", "😲", "⚡"];
@@ -283,6 +226,7 @@ export function CreatureViewer() {
       className="rounded-2xl overflow-hidden mb-4"
       style={{ background: "var(--card)", border: "1px solid var(--border)" }}
     >
+      {/* Header */}
       <div className="p-3 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
         <div className="flex items-center gap-2">
           <span className="text-lg">🦎</span>
@@ -300,7 +244,6 @@ export function CreatureViewer() {
 
       {/* 3D Canvas area */}
       <div className="relative" style={{ height: 280 }}>
-        {/* Surprise overlay */}
         <AnimatePresence>
           {showSurprise && (
             <motion.div
@@ -323,20 +266,50 @@ export function CreatureViewer() {
         </AnimatePresence>
 
         {level >= UNLOCK_3D_LEVEL ? (
-          <Canvas
-            camera={{ position: [0, 0, 2.5], fov: 50 }}
-            style={{ background: "transparent", cursor: "grab" }}
-          >
-            <CreatureScene glbUrl={glbUrl} level={level} onSurprise={handleSurprise} />
-          </Canvas>
+          <>
+            {hasModel ? (
+              <Canvas
+                camera={{ position: [0, 0, 2.5], fov: 50 }}
+                style={{ background: "transparent", cursor: "grab" }}
+              >
+                <CreatureScene glbUrl={glbUrl} level={level} onSurprise={handleSurprise} />
+              </Canvas>
+            ) : isProcessing ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                  className="w-10 h-10 rounded-full border-4"
+                  style={{ borderColor: "var(--primary)", borderTopColor: "transparent" }}
+                />
+                <p className="text-sm" style={{ color: "var(--muted)" }}>
+                  {t("gamification.model_processing")}
+                </p>
+              </div>
+            ) : (
+              /* Empty or failed slot */
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <motion.div
+                  animate={{ y: [0, -8, 0], rotate: [-3, 3, -3] }}
+                  transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                  style={{ fontSize: "4rem" }}
+                >
+                  {isFailed ? "💔" : "✨"}
+                </motion.div>
+                <p className="text-xs text-center px-6" style={{ color: "var(--muted)" }}>
+                  {isFailed
+                    ? t("gamification.model_failed")
+                    : lang === "ko"
+                    ? `슬롯 #${activeSlot} — 사진으로 3D 모델을 만들어보세요!`
+                    : `Slot #${activeSlot} — Generate a 3D model from a photo!`}
+                </p>
+              </div>
+            )}
+          </>
         ) : (
-          // Pre-level-5: Egg placeholder with level progress hint
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <motion.div
-              animate={{
-                y: [0, -8, 0],
-                rotate: [-3, 3, -3],
-              }}
+              animate={{ y: [0, -8, 0], rotate: [-3, 3, -3] }}
               transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
               style={{ fontSize: "5rem" }}
             >
@@ -349,20 +322,73 @@ export function CreatureViewer() {
         )}
       </div>
 
-      {/* Generate button */}
-      {canGenerate && currentReptile?.id && (
-        <div className="p-3" style={{ borderTop: "1px solid var(--border)" }}>
-          <Generate3DButton reptileId={currentReptile.id} />
+      {/* Slot selector */}
+      {level >= UNLOCK_3D_LEVEL && (
+        <div className="flex items-center justify-center gap-2 py-2" style={{ borderTop: "1px solid var(--border)" }}>
+          {Array.from({ length: MAX_MODEL_SLOTS }, (_, i) => i + 1).map((slot) => {
+            const m = models3D.find((x) => x.slot === slot);
+            const isActive = slot === activeSlot;
+            const hasContent = m && m.status === "succeeded";
+            const isProc = m?.status === "processing";
+
+            return (
+              <button
+                key={slot}
+                onClick={() => setActiveSlot(slot)}
+                className="relative flex items-center justify-center transition-all"
+                style={{
+                  width: isActive ? 32 : 24,
+                  height: 8,
+                  borderRadius: 4,
+                  background: isActive
+                    ? "var(--primary)"
+                    : hasContent
+                    ? "color-mix(in srgb, var(--primary), transparent 50%)"
+                    : "var(--border)",
+                  transition: "width 0.2s ease",
+                }}
+              >
+                {isProc && (
+                  <motion.div
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ repeat: Infinity, duration: 1.2 }}
+                    className="absolute inset-0 rounded"
+                    style={{ background: "var(--primary)" }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Hint for tickle/click */}
-      {hasModel && (
-        <div
-          className="px-3 pb-3 text-center text-xs"
-          style={{ color: "var(--muted)" }}
-        >
-          👆 {lang === "ko" ? "탭하면 놀라고, 문질러주면 간지러워해요!" : "Tap to surprise, drag to tickle!"}
+      {/* Generate / hint */}
+      {level >= UNLOCK_3D_LEVEL && (
+        <div className="px-3 pb-3">
+          {canGenerate && currentReptile?.id ? (
+            <>
+              <button
+                onClick={() => setShowModal(true)}
+                className="w-full py-3 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                style={{ background: "var(--primary)", color: "var(--background)" }}
+              >
+                ✨ {t("gamification.generate_3d")}
+              </button>
+              <AnimatePresence>
+                {showModal && currentReptile?.id && (
+                  <Generate3DModal
+                    reptileId={currentReptile.id}
+                    slot={activeSlot}
+                    onClose={() => setShowModal(false)}
+                  />
+                )}
+              </AnimatePresence>
+            </>
+          ) : hasModel ? (
+            <p className="text-center text-xs" style={{ color: "var(--muted)" }}>
+              👆 {lang === "ko" ? "탭하면 놀라고, 드래그하면 돌아요!" : "Tap to surprise, drag to rotate!"}
+            </p>
+          ) : null}
         </div>
       )}
     </div>
