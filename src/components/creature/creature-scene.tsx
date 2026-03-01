@@ -97,14 +97,22 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
   };
 
   return (
-    <group
-      ref={groupRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-    >
-      <primitive object={clonedScene} />
-    </group>
+    <>
+      {/* Invisible full-canvas hit plane for drag events */}
+      <mesh
+        position={[0, 0, 1]}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        <planeGeometry args={[20, 20]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      <group ref={groupRef}>
+        <primitive object={clonedScene} />
+      </group>
+    </>
   );
 }
 
