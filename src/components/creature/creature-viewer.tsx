@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGamification } from "@/lib/gamification-store";
 import { getLevel, UNLOCK_3D_LEVEL, getLevelName } from "@/lib/gamification";
@@ -19,27 +19,187 @@ const CreatureScene = dynamic(
   { ssr: false }
 );
 
-function Generate3DButton({ reptileId }: { reptileId: string }) {
-  const { generate3DModel, model3DStatus } = useGamification();
+function isRealPhoto(url: string | undefined): boolean {
+  if (!url) return false;
+  if (url.length <= 5) return false;
+  if (["🦎", "🐍", "🦕", "🐊", "🦖"].includes(url)) return false;
+  if (url.startsWith("data:image/svg")) return false;
+  return true;
+}
+
+function Generate3DModal({
+  reptileId,
+  onClose,
+}: {
+  reptileId: string;
+  onClose: () => void;
+}) {
+  const { generate3DModel } = useGamification();
   const { reptiles } = useReptileLogs();
   const { t } = useTranslation();
-  const [generating, setGenerating] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reptile = reptiles.find((r) => r.id === reptileId);
-  const photoUrl = reptile?.avatar;
-  const hasPhoto = photoUrl && !photoUrl.startsWith("data:image/svg") && photoUrl !== "" && photoUrl.length > 5 && !["🦎", "🐍", "🦕", "🐊", "🦖"].includes(photoUrl);
+  const profilePhoto = isRealPhoto(reptile?.avatar) ? reptile!.avatar : null;
 
-  const handleGenerate = async () => {
-    if (!hasPhoto || !photoUrl) return;
-    setGenerating(true);
-    await generate3DModel(reptileId, photoUrl);
-    setGenerating(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(profilePhoto);
+  const [generating, setGenerating] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setSelectedPhoto(ev.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
-  if (model3DStatus?.status === "processing" || generating) {
+  const handleGenerate = async () => {
+    if (!selectedPhoto) return;
+    setGenerating(true);
+    await generate3DModel(reptileId, selectedPhoto);
+    setGenerating(false);
+    onClose();
+  };
+
+  const tips = [
+    { icon: "🦎", text: t("gamification.guide_tip_1") },
+    { icon: "💡", text: t("gamification.guide_tip_2") },
+    { icon: "🎨", text: t("gamification.guide_tip_3") },
+    { icon: "📐", text: t("gamification.guide_tip_4") },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      style={{ background: "rgba(0,0,0,0.5)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 28, stiffness: 300 }}
+        className="w-full max-w-lg rounded-t-3xl pb-safe"
+        style={{ background: "var(--card)", maxHeight: "90vh", overflowY: "auto" }}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--border)" }} />
+        </div>
+
+        <div className="px-5 pb-8 pt-2">
+          {/* Title */}
+          <h2 className="text-base font-bold mb-4" style={{ color: "var(--text)" }}>
+            ✨ {t("gamification.guide_title")}
+          </h2>
+
+          {/* Tips */}
+          <div
+            className="rounded-2xl p-3 mb-4"
+            style={{ background: "color-mix(in srgb, var(--primary), transparent 90%)", border: "1px solid color-mix(in srgb, var(--primary), transparent 75%)" }}
+          >
+            <p className="text-xs font-semibold mb-2" style={{ color: "var(--primary)" }}>
+              {t("gamification.guide_tip_header")}
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {tips.map((tip, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span className="text-sm">{tip.icon}</span>
+                  <span className="text-xs" style={{ color: "var(--text)" }}>{tip.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Photo selection */}
+          <p className="text-xs font-semibold mb-2" style={{ color: "var(--muted)" }}>
+            {t("gamification.guide_select_photo")}
+          </p>
+          <div className="flex gap-2 mb-4">
+            {/* Use profile photo */}
+            <button
+              onClick={() => setSelectedPhoto(profilePhoto)}
+              disabled={!profilePhoto}
+              className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all"
+              style={{
+                border: `2px solid ${selectedPhoto === profilePhoto && profilePhoto ? "var(--primary)" : "var(--border)"}`,
+                background: selectedPhoto === profilePhoto && profilePhoto ? "color-mix(in srgb, var(--primary), transparent 88%)" : "var(--background)",
+                color: profilePhoto ? "var(--text)" : "var(--muted)",
+                opacity: profilePhoto ? 1 : 0.5,
+              }}
+            >
+              {profilePhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profilePhoto} alt="" className="w-12 h-12 rounded-xl object-cover" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ background: "var(--border)" }}>🦎</div>
+              )}
+              <span>{profilePhoto ? t("gamification.guide_use_profile") : t("gamification.guide_no_profile_photo")}</span>
+            </button>
+
+            {/* Upload new photo */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all"
+              style={{
+                border: `2px solid ${selectedPhoto && selectedPhoto !== profilePhoto ? "var(--primary)" : "var(--border)"}`,
+                background: selectedPhoto && selectedPhoto !== profilePhoto ? "color-mix(in srgb, var(--primary), transparent 88%)" : "var(--background)",
+                color: "var(--text)",
+              }}
+            >
+              {selectedPhoto && selectedPhoto !== profilePhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={selectedPhoto} alt="" className="w-12 h-12 rounded-xl object-cover" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ background: "var(--border)" }}>📷</div>
+              )}
+              <span>{t("gamification.guide_upload_new")}</span>
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={!selectedPhoto || generating}
+            className="w-full py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-95 disabled:opacity-50"
+            style={{ background: "var(--primary)", color: "var(--background)" }}
+          >
+            {generating ? (
+              <span className="flex items-center justify-center gap-2">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                  className="w-4 h-4 rounded-full border-2"
+                  style={{ borderColor: "var(--background)", borderTopColor: "transparent" }}
+                />
+                {t("gamification.generating")}
+              </span>
+            ) : (
+              `✨ ${t("gamification.guide_generate")}`
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function Generate3DButton({ reptileId }: { reptileId: string }) {
+  const { model3DStatus } = useGamification();
+  const { t } = useTranslation();
+  const [showModal, setShowModal] = useState(false);
+
+  if (model3DStatus?.status === "processing") {
     return (
       <div className="text-center py-4">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: "var(--card)", color: "var(--text)" }}>
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: "var(--background)", color: "var(--text)" }}>
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
@@ -59,32 +219,32 @@ function Generate3DButton({ reptileId }: { reptileId: string }) {
           {t("gamification.model_failed")}
         </p>
         <button
-          onClick={handleGenerate}
+          onClick={() => setShowModal(true)}
           className="px-4 py-2 rounded-xl text-sm font-semibold"
           style={{ background: "var(--primary)", color: "var(--background)" }}
         >
           {t("gamification.generate_3d")}
         </button>
+        <AnimatePresence>
+          {showModal && <Generate3DModal reptileId={reptileId} onClose={() => setShowModal(false)} />}
+        </AnimatePresence>
       </div>
     );
   }
 
-  if (!hasPhoto) {
-    return (
-      <p className="text-xs text-center py-2" style={{ color: "var(--muted)" }}>
-        {t("gamification.no_photo")}
-      </p>
-    );
-  }
-
   return (
-    <button
-      onClick={handleGenerate}
-      className="w-full py-3 rounded-xl text-sm font-semibold transition-all active:scale-95"
-      style={{ background: "var(--primary)", color: "var(--background)" }}
-    >
-      ✨ {t("gamification.generate_3d")}
-    </button>
+    <>
+      <button
+        onClick={() => setShowModal(true)}
+        className="w-full py-3 rounded-xl text-sm font-semibold transition-all active:scale-95"
+        style={{ background: "var(--primary)", color: "var(--background)" }}
+      >
+        ✨ {t("gamification.generate_3d")}
+      </button>
+      <AnimatePresence>
+        {showModal && <Generate3DModal reptileId={reptileId} onClose={() => setShowModal(false)} />}
+      </AnimatePresence>
+    </>
   );
 }
 
