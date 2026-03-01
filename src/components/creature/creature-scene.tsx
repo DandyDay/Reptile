@@ -15,15 +15,17 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
   const { scene } = useGLTF(url);
   const groupRef = useRef<THREE.Group>(null);
   const [anim, setAnim] = useState<"idle" | "surprised">("idle");
+
+  // Drag state
   const isDraggingRef = useRef(false);
   const hasDraggedRef = useRef(false);
-  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
-  const userRotationRef = useRef(0); // accumulated Y rotation from drag
+  const lastPointerRef = useRef<{ x: number } | null>(null);
 
-  // Memoize clone to avoid expensive re-clone on every render
+  // Physics-based rotation
+  const rotationRef = useRef(0);   // current Y rotation
+  const velocityRef = useRef(0);   // angular velocity (rad/frame)
+
   const clonedScene = useMemo(() => scene.clone(true), [scene]);
-
-  // Growth scale by level (5 = base, grows slowly)
   const baseScale = 0.8 + Math.max(0, level - 5) * 0.04;
 
   useEffect(() => {
@@ -37,50 +39,57 @@ function CreatureModel({ url, level, onSurprise }: CreatureModelProps) {
     if (!groupRef.current) return;
     const t = state.clock.getElapsedTime();
 
+    if (!isDraggingRef.current) {
+      // Apply inertia: velocity decays with friction
+      velocityRef.current *= 0.88;
+      rotationRef.current += velocityRef.current;
+    }
+
     if (anim === "idle") {
+      // Breathing only — no Y sway that fights rotation
       groupRef.current.position.y = Math.sin(t * 1.2) * 0.04;
-      // Idle gentle sway + user drag rotation
-      groupRef.current.rotation.y = userRotationRef.current + Math.sin(t * 0.4) * 0.08;
+      groupRef.current.rotation.y = rotationRef.current;
+      groupRef.current.rotation.z = 0;
       groupRef.current.scale.setScalar(baseScale);
     } else if (anim === "surprised") {
       const progress = ((t * 2) % 2) / 2;
       groupRef.current.position.y = Math.sin(progress * Math.PI) * 0.3;
       groupRef.current.rotation.z = Math.sin(progress * Math.PI * 3) * 0.15;
-      groupRef.current.rotation.y = userRotationRef.current;
-      const scalePulse = baseScale + Math.sin(progress * Math.PI) * 0.15;
-      groupRef.current.scale.setScalar(scalePulse);
+      groupRef.current.rotation.y = rotationRef.current;
+      groupRef.current.scale.setScalar(baseScale + Math.sin(progress * Math.PI) * 0.15);
     }
   });
 
   const handlePointerDown = (e: THREE.Event) => {
     isDraggingRef.current = true;
     hasDraggedRef.current = false;
+    velocityRef.current = 0; // kill momentum on grab
     const pe = e as unknown as PointerEvent;
-    lastPointerRef.current = { x: pe.clientX, y: pe.clientY };
-    (e as unknown as PointerEvent).currentTarget &&
-      (e as unknown as { target: Element }).target instanceof Element &&
-      (e as unknown as { target: Element }).target.setPointerCapture?.((pe as PointerEvent).pointerId);
+    lastPointerRef.current = { x: pe.clientX };
   };
 
   const handlePointerMove = (e: THREE.Event) => {
     if (!isDraggingRef.current || !lastPointerRef.current) return;
     const pe = e as unknown as PointerEvent;
     const dx = pe.clientX - lastPointerRef.current.x;
-    if (Math.abs(dx) > 3) {
+    if (Math.abs(dx) > 2) {
       hasDraggedRef.current = true;
-      userRotationRef.current += dx * 0.01;
-      lastPointerRef.current = { x: pe.clientX, y: pe.clientY };
+      const delta = dx * 0.009;
+      rotationRef.current += delta;
+      velocityRef.current = delta; // velocity = last frame's delta for momentum
+      lastPointerRef.current = { x: pe.clientX };
     }
   };
 
   const handlePointerUp = (e: THREE.Event) => {
     isDraggingRef.current = false;
-    // If barely moved → treat as tap → surprised
+    lastPointerRef.current = null;
+    // Tap (no significant movement) → surprise
     if (!hasDraggedRef.current && anim !== "surprised") {
+      velocityRef.current = 0;
       setAnim("surprised");
       onSurprise();
     }
-    lastPointerRef.current = null;
     hasDraggedRef.current = false;
     const pe = e as unknown as PointerEvent;
     (e as unknown as { target: Element }).target instanceof Element &&
