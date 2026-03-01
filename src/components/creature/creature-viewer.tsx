@@ -38,13 +38,14 @@ function Generate3DModal({
 }) {
   const { generate3DModel } = useGamification();
   const { reptiles } = useReptileLogs();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reptile = reptiles.find((r) => r.id === reptileId);
   const profilePhoto = isRealPhoto(reptile?.avatar) ? reptile!.avatar : null;
 
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(profilePhoto);
+  const [texturePrompt, setTexturePrompt] = useState("");
   const [generating, setGenerating] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,7 +59,7 @@ function Generate3DModal({
   const handleGenerate = async () => {
     if (!selectedPhoto) return;
     setGenerating(true);
-    await generate3DModel(reptileId, selectedPhoto, slot);
+    await generate3DModel(reptileId, selectedPhoto, slot, texturePrompt.trim() || undefined);
     setGenerating(false);
     onClose();
   };
@@ -158,6 +159,26 @@ function Generate3DModal({
             accept="image/*"
             className="hidden"
             onChange={handleFileChange}
+          />
+
+          {/* Texture prompt */}
+          <p className="text-xs font-semibold mb-1.5" style={{ color: "var(--muted)" }}>
+            {lang === "ko" ? "스타일 프롬프트 (선택)" : "Style prompt (optional)"}
+          </p>
+          <textarea
+            value={texturePrompt}
+            onChange={(e) => setTexturePrompt(e.target.value)}
+            maxLength={600}
+            rows={2}
+            placeholder={lang === "ko" ? "예: 초록색 이구아나, 파란 비늘, 사막 도마뱀..." : "e.g. green iguana, blue scales, desert lizard..."}
+            className="w-full rounded-xl px-3 py-2 text-sm resize-none mb-4 outline-none"
+            style={{
+              background: "var(--background)",
+              border: "1.5px solid var(--border)",
+              color: "var(--text)",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "var(--primary)")}
+            onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
           />
 
           <button

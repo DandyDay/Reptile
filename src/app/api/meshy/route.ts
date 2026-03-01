@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { action, taskId, imageUrl } = body;
+    const { action, taskId, imageUrl, texturePrompt } = body;
 
     if (action === "create") {
       if (!imageUrl) {
@@ -31,19 +31,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "imageUrl must be from Supabase storage" }, { status: 400 });
       }
 
+      const meshyBody: Record<string, unknown> = {
+        image_url: imageUrl,
+        enable_pbr: false,
+        should_remesh: true,
+        topology: "quad",
+        target_polycount: 30000,
+      };
+      if (texturePrompt && typeof texturePrompt === "string") {
+        meshyBody.texture_prompt = texturePrompt.slice(0, 600);
+      }
+
       const meshyRes = await fetch(MESHY_BASE, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${MESHY_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          image_url: imageUrl,
-          enable_pbr: false,
-          should_remesh: true,
-          topology: "quad",
-          target_polycount: 30000,
-        }),
+        body: JSON.stringify(meshyBody),
       });
 
       const text = await meshyRes.text();

@@ -43,7 +43,7 @@ interface GamificationContextType {
   activeSlot: number;
   setActiveSlot: (slot: number) => void;
   isLoaded: boolean;
-  generate3DModel: (reptileId: string, imageUrl: string, slot: number) => Promise<void>;
+  generate3DModel: (reptileId: string, imageUrl: string, slot: number, texturePrompt?: string) => Promise<void>;
   fetchModel3DStatus: (reptileId: string) => Promise<void>;
 }
 
@@ -56,7 +56,7 @@ const GamificationContext = createContext<GamificationContextType>({
   activeSlot: 1,
   setActiveSlot: () => {},
   isLoaded: false,
-  generate3DModel: async () => {},
+  generate3DModel: async () => { },
   fetchModel3DStatus: async () => {},
 });
 
@@ -524,7 +524,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
   // 3D model generation
   const generate3DModel = useCallback(
-    async (reptileId: string, imageUrl: string, slot: number) => {
+    async (reptileId: string, imageUrl: string, slot: number, texturePrompt?: string) => {
       if (!session?.user) return;
       let publicImageUrl = imageUrl;
       if (imageUrl.startsWith("data:")) {
@@ -540,7 +540,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       const res = await fetch("/api/meshy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", imageUrl: publicImageUrl }),
+        body: JSON.stringify({ action: "create", imageUrl: publicImageUrl, texturePrompt }),
       });
       if (!res.ok) {
         const text = await res.text();
