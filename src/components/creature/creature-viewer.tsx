@@ -206,7 +206,9 @@ export function CreatureViewer() {
 
   const activeModel = models3D.find((m) => m.slot === activeSlot) ?? null;
   const rawGlbUrl = activeModel?.status === "succeeded" ? activeModel.glbUrl : null;
-  const glbUrl = rawGlbUrl ? `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}` : null;
+  const glbUrl = rawGlbUrl
+    ? `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}${activeModel?.taskId ? `&taskId=${encodeURIComponent(activeModel.taskId)}` : ""}`
+    : null;
   const hasModel = !!glbUrl;
   const isProcessing = activeModel?.status === "processing";
   const isFailed = activeModel?.status === "failed";
