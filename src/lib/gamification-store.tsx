@@ -511,7 +511,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
   const fetchModel3DStatus = useCallback(async (reptileId: string) => {
     if (!session?.user) return;
-    const { data } = await supabase.from("reptile_3d_models").select("*").eq("reptile_id", reptileId).single();
+    const { data } = await supabase.from("reptile_3d_models").select("*").eq("reptile_id", reptileId).maybeSingle();
     if (data) {
       const status = data.status as Model3DStatus["status"];
       setModel3DStatus({ status, glbUrl: data.glb_url, thumbnailUrl: data.thumbnail_url, taskId: data.task_id });
