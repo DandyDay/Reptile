@@ -236,8 +236,13 @@ export function CreatureViewer() {
   // Compute glbUrl before any early returns so the useEffect below can safely close over it
   const activeModel = models3D.find((m) => m.slot === activeSlot) ?? null;
   const rawGlbUrl = activeModel?.status === "succeeded" ? activeModel.glbUrl : null;
+  // Supabase Storage URLs are permanent and public — use directly.
+  // Meshy CDN URLs expire, so route them through our proxy for refresh/persistence.
+  const isSupabaseUrl = rawGlbUrl?.includes(".supabase.co") ?? false;
   const glbUrl = rawGlbUrl
-    ? `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}${activeModel?.taskId ? `&taskId=${encodeURIComponent(activeModel.taskId)}` : ""}`
+    ? isSupabaseUrl
+      ? rawGlbUrl
+      : `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}${activeModel?.taskId ? `&taskId=${encodeURIComponent(activeModel.taskId)}` : ""}`
     : null;
 
   // Reset loading state whenever the active GLB URL changes
