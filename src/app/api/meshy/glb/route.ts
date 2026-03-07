@@ -51,15 +51,27 @@ export async function GET(req: NextRequest) {
   }
 
   const proxyUrl = async (targetUrl: string) => {
-    const upstream = await fetch(targetUrl);
-    if (!upstream.ok) return null;
-    return new NextResponse(upstream.body, {
-      headers: {
-        "Content-Type": "model/gltf-binary",
-        "Cache-Control": "public, max-age=86400", // 1 day (URLs expire in ~3 days)
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const upstream = await fetch(targetUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!upstream.ok) {
+        console.warn(`[glb proxy] upstream ${upstream.status} for ${targetUrl.substring(0, 80)}`);
+        return null;
+      }
+      return new NextResponse(upstream.body, {
+        headers: {
+          "Content-Type": "model/gltf-binary",
+          "Cache-Control": "public, max-age=86400", // 1 day (URLs expire in ~3 days)
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    } catch (e) {
+      clearTimeout(timeout);
+      console.warn("[glb proxy] fetch error:", e);
+      return null;
+    }
   };
 
   try {

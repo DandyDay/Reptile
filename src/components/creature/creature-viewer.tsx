@@ -1,12 +1,21 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Component, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGamification, MAX_MODEL_SLOTS } from "@/lib/gamification-store";
 import { getLevel, UNLOCK_3D_LEVEL, getLevelName } from "@/lib/gamification";
 import { useReptileLogs } from "@/lib/store";
 import { useTranslation } from "@/lib/i18n";
+
+class CanvasErrorBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { fallback: ReactNode; children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children; }
+}
 
 // Dynamically import the Canvas to avoid SSR issues
 const Canvas = dynamic(
@@ -304,12 +313,23 @@ export function CreatureViewer() {
           <>
             {hasModel ? (
               <div className="relative w-full h-full">
-                <Canvas
-                  camera={{ position: [0, 0, 2.5], fov: 50 }}
-                  style={{ background: "transparent", cursor: modelLoading ? "default" : "grab" }}
+                <CanvasErrorBoundary
+                  fallback={
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <div className="text-3xl opacity-40">⚠️</div>
+                      <p className="text-xs" style={{ color: "var(--muted)" }}>
+                        {lang === "ko" ? "3D 모델 로드 실패" : "Failed to load 3D model"}
+                      </p>
+                    </div>
+                  }
                 >
-                  <CreatureScene glbUrl={glbUrl} level={level} onSurprise={handleSurprise} onLoad={() => setModelLoading(false)} />
-                </Canvas>
+                  <Canvas
+                    camera={{ position: [0, 0, 2.5], fov: 50 }}
+                    style={{ background: "transparent", cursor: modelLoading ? "default" : "grab" }}
+                  >
+                    <CreatureScene glbUrl={glbUrl} level={level} onSurprise={handleSurprise} onLoad={() => setModelLoading(false)} />
+                  </Canvas>
+                </CanvasErrorBoundary>
                 <AnimatePresence>
                   {modelLoading && (
                     <motion.div
