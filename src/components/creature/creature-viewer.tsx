@@ -224,6 +224,13 @@ export function CreatureViewer() {
     }
   }, [currentReptile?.id, fetchModel3DStatus]);
 
+  // Compute glbUrl before any early returns so the useEffect below can safely close over it
+  const activeModel = models3D.find((m) => m.slot === activeSlot) ?? null;
+  const rawGlbUrl = activeModel?.status === "succeeded" ? activeModel.glbUrl : null;
+  const glbUrl = rawGlbUrl
+    ? `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}${activeModel?.taskId ? `&taskId=${encodeURIComponent(activeModel.taskId)}` : ""}`
+    : null;
+
   // Reset loading state whenever the active GLB URL changes
   const prevGlbRef = useRef<string | null>(null);
   useEffect(() => {
@@ -235,11 +242,6 @@ export function CreatureViewer() {
 
   if (!isLoaded) return null;
 
-  const activeModel = models3D.find((m) => m.slot === activeSlot) ?? null;
-  const rawGlbUrl = activeModel?.status === "succeeded" ? activeModel.glbUrl : null;
-  const glbUrl = rawGlbUrl
-    ? `/api/meshy/glb?url=${encodeURIComponent(rawGlbUrl)}${activeModel?.taskId ? `&taskId=${encodeURIComponent(activeModel.taskId)}` : ""}`
-    : null;
   const hasModel = !!glbUrl;
   const isProcessing = activeModel?.status === "processing";
   const isFailed = activeModel?.status === "failed";
