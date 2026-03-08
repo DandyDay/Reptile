@@ -467,14 +467,26 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       try {
         const data = JSON.parse(event.data);
         if (data.status === "SUCCEEDED") {
-          const glbUrl = data.model_urls?.glb ?? null;
+          const meshyGlbUrl = data.model_urls?.glb ?? null;
           const thumbnailUrl = data.thumbnail_url ?? null;
-          await supabase.from("reptile_3d_models").update({
-            status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
-          }).eq("reptile_id", reptileId).eq("slot", slot);
-          updateSlot({ status: "succeeded", glbUrl, thumbnailUrl });
           es.close();
           eventSourcesRef.current.delete(slot);
+          // Persist to Supabase Storage server-side and get permanent URL
+          let finalGlbUrl = meshyGlbUrl;
+          try {
+            const res = await fetch("/api/meshy/save-model", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ taskId, glbUrl: meshyGlbUrl, thumbnailUrl, reptileId, slot }),
+            });
+            if (res.ok) {
+              const { permanentUrl } = await res.json();
+              finalGlbUrl = permanentUrl;
+            }
+          } catch (e) {
+            console.error("[startStreaming] save-model failed:", e);
+          }
+          updateSlot({ status: "succeeded", glbUrl: finalGlbUrl, thumbnailUrl });
         } else if (data.status === "FAILED") {
           await supabase.from("reptile_3d_models").update({
             status: "failed", updated_at: new Date().toISOString(),
@@ -499,12 +511,24 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         if (res.ok) {
           const data = await res.json();
           if (data.status === "SUCCEEDED") {
-            const glbUrl = data.model_urls?.glb ?? null;
+            const meshyGlbUrl = data.model_urls?.glb ?? null;
             const thumbnailUrl = data.thumbnail_url ?? null;
-            await supabase.from("reptile_3d_models").update({
-              status: "succeeded", glb_url: glbUrl, thumbnail_url: thumbnailUrl, updated_at: new Date().toISOString(),
-            }).eq("reptile_id", reptileId).eq("slot", slot);
-            updateSlot({ status: "succeeded", glbUrl, thumbnailUrl });
+            // Persist to Supabase Storage server-side
+            let finalGlbUrl = meshyGlbUrl;
+            try {
+              const saveRes = await fetch("/api/meshy/save-model", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ taskId, glbUrl: meshyGlbUrl, thumbnailUrl, reptileId, slot }),
+              });
+              if (saveRes.ok) {
+                const { permanentUrl } = await saveRes.json();
+                finalGlbUrl = permanentUrl;
+              }
+            } catch (e) {
+              console.error("[onerror fallback] save-model failed:", e);
+            }
+            updateSlot({ status: "succeeded", glbUrl: finalGlbUrl, thumbnailUrl });
             return;
           } else if (data.status === "IN_PROGRESS" || data.status === "PENDING") {
             console.log("Task still in progress, restarting stream for slot", slot);
