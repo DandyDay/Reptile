@@ -96,7 +96,7 @@ function QuestRow({
         <div className="text-xs mt-0.5 mb-1.5" style={{ color: "var(--muted)" }}>
           {lang === "ko" ? quest.descKo : quest.descEn}
         </div>
-        {quest.target > 1 && (
+        {quest.target > 1 && !rewarded && (
           <div className="flex items-center gap-2">
             <div
               className="flex-1 h-1.5 rounded-full overflow-hidden"
